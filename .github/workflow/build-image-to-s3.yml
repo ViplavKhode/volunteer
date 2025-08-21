@@ -1,0 +1,71 @@
+name: Build Docker image and upload to S3
+
+on:
+  push:
+    branches: [ "SathwikB_automate_dockerimgpush" ]   # change to your dev branch while testing, e.g. "sb_automate_dockerimgpush"
+  pull_request:
+    branches: [ "SathwikB_automate_dockerimgpush" ]
+
+env:
+  APP_NAME: volunteer-app
+  AWS_REGION: us-east-1
+  S3_BUCKET: saayam-virginia-private
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Compute tags
+        id: vars
+        shell: bash
+        run: |
+          SHA="${GITHUB_SHA::7}"
+          echo "sha_short=$SHA" >> $GITHUB_OUTPUT
+          echo "archive=${{ env.APP_NAME }}-${SHA}.tar.gz" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ env.APP_NAME }}:${{ steps.vars.outputs.sha_short }} -t ${{ env.APP_NAME }}:latest .
+
+      - name: Save image as .tar.gz
+        run: |
+          docker save ${{ env.APP_NAME }}:${{ steps.vars.outputs.sha_short }} \
+            | gzip > ${{ steps.vars.outputs.archive }}
+
+      - name: Generate checksum
+        run: |
+          shasum -a 256 ${{ steps.vars.outputs.archive }} > ${{ steps.vars.outputs.archive }}.sha256
+
+      # --- Upload only on push to main/tmp ---
+      - name: Configure AWS credentials
+        if: github.event_name == 'push' && github.ref == 'refs/heads/SathwikB_automate_dockerimgpush'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_VOLUNTEER }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_VOLUNTEER }}
+
+      - name: Upload image (versioned by commit SHA)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/SathwikB_automate_dockerimgpush'
+        run: |
+          aws s3 cp "${{ steps.vars.outputs.archive }}" \
+            "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/${{ steps.vars.outputs.archive }}"
+          aws s3 cp "${{ steps.vars.outputs.archive }}.sha256" \
+            "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/${{ steps.vars.outputs.archive }}.sha256"
+
+      - name: Upload image as latest
+        if: github.event_name == 'push' && github.ref == 'refs/heads/SathwikB_automate_dockerimgpush'
+        run: |
+          cp "${{ steps.vars.outputs.archive }}" "${{ env.APP_NAME }}-latest.tar.gz"
+          cp "${{ steps.vars.outputs.archive }}.sha256" "${{ env.APP_NAME }}-latest.tar.gz.sha256"
+          aws s3 cp "${{ env.APP_NAME }}-latest.tar.gz" \
+            "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/${{ env.APP_NAME }}-latest.tar.gz"
+          aws s3 cp "${{ env.APP_NAME }}-latest.tar.gz.sha256" \
+            "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/${{ env.APP_NAME }}-latest.tar.gz.sha256"
