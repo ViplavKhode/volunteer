@@ -2,7 +2,7 @@ name: Build Docker image and upload to S3
 
 on:
   push:
-    branches: [ "SathwikB_automate_dockerimgpush" ]   # change to your dev branch while testing, e.g. "sb_automate_dockerimgpush"
+    branches: [ "SathwikB_automate_dockerimgpush" ]   
   pull_request:
     branches: [ "SathwikB_automate_dockerimgpush" ]
 
