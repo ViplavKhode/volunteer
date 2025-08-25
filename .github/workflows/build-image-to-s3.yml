@@ -73,44 +73,53 @@ jobs:
             "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/latest/${{ env.APP_NAME }}-latest.tar.gz.sha256"
 
       # Keep only the last 3 SHA-tagged builds
+      # Keep only the last 3 SHA-tagged builds
       - name: Keep only last 3 SHA-tagged images
         if: github.event_name == 'push' && github.ref == 'refs/heads/SathwikB_automate_dockerimgpush'
         shell: bash
         run: |
           set -euo pipefail
 
-          PREFIX="docker-images/${{ env.APP_NAME }}/dev/sha/"
           BUCKET="${{ env.S3_BUCKET }}"
+          PREFIX="docker-images/${{ env.APP_NAME }}/dev/sha/"
 
-          # Get keys sorted by LastModified DESC (newest first), then keep only *.tar.gz
-          IMAGES=$(
-            aws s3api list-objects-v2 \
-              --bucket "$BUCKET" \
-              --prefix "$PREFIX" \
-              --query 'reverse(sort_by(Contents,&LastModified))[].Key' \
-              --output text \
-            | awk '/\.tar\.gz$/'
-          )
+          # Get only .tar.gz keys, newest first
+          KEYS=$(aws s3api list-objects-v2 \
+            --bucket "$BUCKET" \
+            --prefix "$PREFIX" \
+            --query 'reverse(sort_by(Contents[?ends_with(Key, `.tar.gz`)], &LastModified))[].Key' \
+            --output text)
 
-          # Nothing to do if empty or only a few images
-          if [ -z "${IMAGES}" ]; then
-            echo "No SHA-tagged images found under s3://${BUCKET}/${PREFIX}"
+          if [ -z "$KEYS" ]; then
+            echo "No .tar.gz images found under s3://$BUCKET/$PREFIX"
             exit 0
           fi
 
-          count=0
-          # Read keys line-by-line to preserve ordering
+          # Turn tabs into newlines and count
+          KEYS_NL=$(echo "$KEYS" | tr '\t' '\n')
+          TOTAL=$(echo "$KEYS_NL" | wc -l | tr -d ' ')
+          echo "Found $TOTAL .tar.gz images:"
+          echo "$KEYS_NL"
+
+          # Keep first 3 (newest). Delete the rest + their .sha256
+          if [ "$TOTAL" -le 3 ]; then
+            echo "Nothing to delete (<=3 images)."
+            exit 0
+          fi
+
+          TO_DELETE=$(echo "$KEYS_NL" | tail -n +4)
+          echo "Deleting these:"
+          echo "$TO_DELETE"
+
           while IFS= read -r key; do
-            count=$((count+1))
-            if [ $count -le 3 ]; then
-              echo "Keeping: $key"
-            else
-              echo "Deleting old: $key"
-              aws s3 rm "s3://$BUCKET/$key" || true
-              # Best-effort remove checksum
-              if aws s3 ls "s3://$BUCKET/${key}.sha256" >/dev/null 2>&1; then
-                echo "Deleting checksum: ${key}.sha256"
-                aws s3 rm "s3://$BUCKET/${key}.sha256" || true
-              fi
-            fi
-          done <<< "$IMAGES"
+            [ -z "$key" ] && continue
+            aws s3 rm "s3://$BUCKET/$key" || true
+            aws s3 rm "s3://$BUCKET/${key}.sha256" || true
+          done <<< "$TO_DELETE"
+
+      # List objects after cleanup
+      - name: "List objects after cleanup (sha & latest)"
+        if: github.event_name == 'push' && github.ref == 'refs/heads/SathwikB_automate_dockerimgpush'
+        run: |
+          aws s3 ls "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/sha/"
+          aws s3 ls "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/latest/"
