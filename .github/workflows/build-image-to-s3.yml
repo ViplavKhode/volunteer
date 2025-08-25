@@ -1,10 +1,11 @@
-name: Build Docker image and upload to S3
+name: Build Docker image and upload to S3 (sha + latest split)
 
 on:
   push:
-    branches: [ "SathwikB_automate_dockerimgpush" ]   
+    branches: [ "SathwikB_automate_dockerimgpush" ]
   pull_request:
     branches: [ "SathwikB_automate_dockerimgpush" ]
+  workflow_dispatch:
 
 env:
   APP_NAME: volunteer-app
@@ -36,14 +37,13 @@ jobs:
 
       - name: Save image as .tar.gz
         run: |
-          docker save ${{ env.APP_NAME }}:${{ steps.vars.outputs.sha_short }} \
-            | gzip > ${{ steps.vars.outputs.archive }}
+          docker save ${{ env.APP_NAME }}:${{ steps.vars.outputs.sha_short }} | gzip > ${{ steps.vars.outputs.archive }}
 
       - name: Generate checksum
         run: |
           shasum -a 256 ${{ steps.vars.outputs.archive }} > ${{ steps.vars.outputs.archive }}.sha256
 
-      # --- Upload only on push to main/tmp ---
+      # --- Upload only on push (not PRs) ---
       - name: Configure AWS credentials
         if: github.event_name == 'push' && github.ref == 'refs/heads/SathwikB_automate_dockerimgpush'
         uses: aws-actions/configure-aws-credentials@v4
@@ -52,20 +52,56 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_VOLUNTEER }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_VOLUNTEER }}
 
+      # Upload SHA-tagged image into /sha/
       - name: Upload image (versioned by commit SHA)
         if: github.event_name == 'push' && github.ref == 'refs/heads/SathwikB_automate_dockerimgpush'
         run: |
           aws s3 cp "${{ steps.vars.outputs.archive }}" \
-            "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/${{ steps.vars.outputs.archive }}"
+            "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/sha/${{ steps.vars.outputs.archive }}"
           aws s3 cp "${{ steps.vars.outputs.archive }}.sha256" \
-            "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/${{ steps.vars.outputs.archive }}.sha256"
+            "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/sha/${{ steps.vars.outputs.archive }}.sha256"
 
+      # Upload "latest" pointer into /latest/
       - name: Upload image as latest
         if: github.event_name == 'push' && github.ref == 'refs/heads/SathwikB_automate_dockerimgpush'
         run: |
           cp "${{ steps.vars.outputs.archive }}" "${{ env.APP_NAME }}-latest.tar.gz"
           cp "${{ steps.vars.outputs.archive }}.sha256" "${{ env.APP_NAME }}-latest.tar.gz.sha256"
           aws s3 cp "${{ env.APP_NAME }}-latest.tar.gz" \
-            "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/${{ env.APP_NAME }}-latest.tar.gz"
+            "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/latest/${{ env.APP_NAME }}-latest.tar.gz"
           aws s3 cp "${{ env.APP_NAME }}-latest.tar.gz.sha256" \
-            "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/${{ env.APP_NAME }}-latest.tar.gz.sha256"
+            "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/latest/${{ env.APP_NAME }}-latest.tar.gz.sha256"
+
+      # Keep only the last 3 SHA-tagged builds
+      - name: Keep only last 3 SHA-tagged images
+        if: github.event_name == 'push' && github.ref == 'refs/heads/SathwikB_automate_dockerimgpush'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PREFIX="docker-images/${{ env.APP_NAME }}/dev/sha/"
+          BUCKET="${{ env.S3_BUCKET }}"
+
+          # List SHA-tagged tarballs, newest first
+          IMAGES=$(aws s3api list-objects-v2 \
+            --bucket "$BUCKET" \
+            --prefix "$PREFIX" \
+            --query 'Contents[].[Key,LastModified]' \
+            --output text \
+            | grep '\.tar\.gz$' \
+            | sort -k2,2r \
+            | awk '{print $1}')
+
+          count=0
+          for key in $IMAGES; do
+            count=$((count+1))
+            if [ $count -le 3 ]; then
+              echo "Keeping: $key"
+            else
+              echo "Deleting old: $key"
+              aws s3 rm "s3://$BUCKET/$key" || true
+              if aws s3 ls "s3://$BUCKET/${key}.sha256" >/dev/null 2>&1; then
+                aws s3 rm "s3://$BUCKET/${key}.sha256" || true
+              fi
+            fi
+          done
