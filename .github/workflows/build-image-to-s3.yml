@@ -82,26 +82,35 @@ jobs:
           PREFIX="docker-images/${{ env.APP_NAME }}/dev/sha/"
           BUCKET="${{ env.S3_BUCKET }}"
 
-          # List SHA-tagged tarballs, newest first
-          IMAGES=$(aws s3api list-objects-v2 \
-            --bucket "$BUCKET" \
-            --prefix "$PREFIX" \
-            --query 'Contents[].[Key,LastModified]' \
-            --output text \
-            | grep '\.tar\.gz$' \
-            | sort -k2,2r \
-            | awk '{print $1}')
+          # Get keys sorted by LastModified DESC (newest first), then keep only *.tar.gz
+          IMAGES=$(
+            aws s3api list-objects-v2 \
+              --bucket "$BUCKET" \
+              --prefix "$PREFIX" \
+              --query 'reverse(sort_by(Contents,&LastModified))[].Key' \
+              --output text \
+            | awk '/\.tar\.gz$/'
+          )
+
+          # Nothing to do if empty or only a few images
+          if [ -z "${IMAGES}" ]; then
+            echo "No SHA-tagged images found under s3://${BUCKET}/${PREFIX}"
+            exit 0
+          fi
 
           count=0
-          for key in $IMAGES; do
+          # Read keys line-by-line to preserve ordering
+          while IFS= read -r key; do
             count=$((count+1))
             if [ $count -le 3 ]; then
               echo "Keeping: $key"
             else
               echo "Deleting old: $key"
               aws s3 rm "s3://$BUCKET/$key" || true
+              # Best-effort remove checksum
               if aws s3 ls "s3://$BUCKET/${key}.sha256" >/dev/null 2>&1; then
+                echo "Deleting checksum: ${key}.sha256"
                 aws s3 rm "s3://$BUCKET/${key}.sha256" || true
               fi
             fi
-          done
+          done <<< "$IMAGES"
