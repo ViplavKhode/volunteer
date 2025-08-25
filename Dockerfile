@@ -28,4 +28,4 @@ ENV JAVA_OPTS=""
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]
 
 # line to check the test run
-# to check the test run-4
+# to check the test run-5
