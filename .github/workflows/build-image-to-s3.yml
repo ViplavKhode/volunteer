@@ -2,9 +2,9 @@ name: Build Docker image and upload to S3
 
 on:
   push:
-    branches: [ "SathwikB_automate_dockerimgpush", "main" ]  
+    branches: [ "main" ]  
   pull_request:
-    branches: [ "SathwikB_automate_dockerimgpush", "main" ]   
+    branches: [ "main" ]   
 
 env:
   APP_NAME: volunteer-app
