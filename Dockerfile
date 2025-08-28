@@ -4,8 +4,8 @@ WORKDIR /workspace
 
 # Cache deps first (faster rebuilds)
 COPY pom.xml ./
-#COPY .mvn/ .mvn/
-#COPY mvnw .        
+COPY .mvn/ .mvn/
+COPY mvnw .        
 RUN mvn -B -DskipTests dependency:go-offline || true
 
 # Build
