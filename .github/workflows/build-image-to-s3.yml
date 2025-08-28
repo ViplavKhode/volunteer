@@ -1,11 +1,10 @@
-name: Build Docker image and upload to S3 (sha + latest split)
+name: Build Docker image and upload to S3
 
 on:
   push:
-    branches: [ "SathwikB_automate_dockerimgpush" ]
+    branches: [ "SathwikB_automate_dockerimgpush", "main" ]  
   pull_request:
-    branches: [ "SathwikB_automate_dockerimgpush" ]
-  workflow_dispatch:
+    branches: [ "SathwikB_automate_dockerimgpush", "main" ]   
 
 env:
   APP_NAME: volunteer-app
@@ -23,67 +22,61 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Compute tags
-        id: vars
+      # Extract <version> from pom.xml
+      - name: Extract version from pom.xml
+        id: ver
         shell: bash
         run: |
-          SHA="${GITHUB_SHA::7}"
-          echo "sha_short=$SHA" >> $GITHUB_OUTPUT
-          echo "archive=${{ env.APP_NAME }}-${SHA}.tar.gz" >> $GITHUB_OUTPUT
+          VERSION_RAW=$(grep -E '<version>.*</version>' pom.xml | grep -v '<modelVersion>' | head -n1 | sed -E 's/.*<version>([^<]+)<\/version>.*/\1/')
+          VERSION_STRIPPED=$(echo "$VERSION_RAW" | sed 's/-SNAPSHOT$//')
+
+          DATE_UTC=$(date -u +%Y%m%d-%H%M)   # e.g., 20250827-1430
+          VERSION_TAG="v${VERSION_STRIPPED}-${DATE_UTC}"
+
+          echo "version=$VERSION_TAG" >> $GITHUB_OUTPUT
+          echo "archive=${APP_NAME}-${VERSION_TAG}.tar.gz" >> $GITHUB_OUTPUT
+          echo "Using version: $VERSION_TAG"
 
       - name: Build Docker image
         run: |
-          docker build -t ${{ env.APP_NAME }}:${{ steps.vars.outputs.sha_short }} -t ${{ env.APP_NAME }}:latest .
+          docker build \
+            -t ${{ env.APP_NAME }}:${{ steps.ver.outputs.version }} \
+            -t ${{ env.APP_NAME }}:latest \
+            .
 
       - name: Save image as .tar.gz
         run: |
-          docker save ${{ env.APP_NAME }}:${{ steps.vars.outputs.sha_short }} | gzip > ${{ steps.vars.outputs.archive }}
+          docker save ${{ env.APP_NAME }}:${{ steps.ver.outputs.version }} | gzip > ${{ steps.ver.outputs.archive }}
+          ls -lh ${{ steps.ver.outputs.archive }}
 
-      - name: Generate checksum
-        run: |
-          shasum -a 256 ${{ steps.vars.outputs.archive }} > ${{ steps.vars.outputs.archive }}.sha256
-
-      # --- Upload only on push (not PRs) ---
       - name: Configure AWS credentials
-        if: github.event_name == 'push' && github.ref == 'refs/heads/SathwikB_automate_dockerimgpush'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.AWS_REGION }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_VOLUNTEER }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_VOLUNTEER }}
 
-      # Upload SHA-tagged image into /sha/
-      - name: Upload image (versioned by commit SHA)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/SathwikB_automate_dockerimgpush'
+      # Upload versioned tarball under /versions/
+      - name: Upload versioned image
         run: |
-          aws s3 cp "${{ steps.vars.outputs.archive }}" \
-            "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/sha/${{ steps.vars.outputs.archive }}"
-          aws s3 cp "${{ steps.vars.outputs.archive }}.sha256" \
-            "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/sha/${{ steps.vars.outputs.archive }}.sha256"
+          aws s3 cp "${{ steps.ver.outputs.archive }}" \
+            "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/versions/${{ steps.ver.outputs.archive }}"
 
-      # Upload "latest" pointer into /latest/
-      - name: Upload image as latest
-        if: github.event_name == 'push' && github.ref == 'refs/heads/SathwikB_automate_dockerimgpush'
+      # Upload/overwrite latest under /latest/
+      - name: Upload latest image
         run: |
-          cp "${{ steps.vars.outputs.archive }}" "${{ env.APP_NAME }}-latest.tar.gz"
-          cp "${{ steps.vars.outputs.archive }}.sha256" "${{ env.APP_NAME }}-latest.tar.gz.sha256"
+          cp "${{ steps.ver.outputs.archive }}" "${{ env.APP_NAME }}-latest.tar.gz"
           aws s3 cp "${{ env.APP_NAME }}-latest.tar.gz" \
             "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/latest/${{ env.APP_NAME }}-latest.tar.gz"
-          aws s3 cp "${{ env.APP_NAME }}-latest.tar.gz.sha256" \
-            "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/latest/${{ env.APP_NAME }}-latest.tar.gz.sha256"
 
-      # Keep only the last 3 SHA-tagged builds
-      # Keep only the last 3 SHA-tagged builds
-      - name: Keep only last 3 SHA-tagged images
-        if: github.event_name == 'push' && github.ref == 'refs/heads/SathwikB_automate_dockerimgpush'
+      # Keep only the newest 3 versioned tarballs
+      - name: Keep only last 3 versioned images
         shell: bash
         run: |
           set -euo pipefail
-
           BUCKET="${{ env.S3_BUCKET }}"
-          PREFIX="docker-images/${{ env.APP_NAME }}/dev/sha/"
+          PREFIX="docker-images/${{ env.APP_NAME }}/dev/versions/"
 
-          # Get only .tar.gz keys, newest first
           KEYS=$(aws s3api list-objects-v2 \
             --bucket "$BUCKET" \
             --prefix "$PREFIX" \
@@ -91,35 +84,31 @@ jobs:
             --output text)
 
           if [ -z "$KEYS" ]; then
-            echo "No .tar.gz images found under s3://$BUCKET/$PREFIX"
+            echo "No tarballs under s3://$BUCKET/$PREFIX"
             exit 0
           fi
 
-          # Turn tabs into newlines and count
           KEYS_NL=$(echo "$KEYS" | tr '\t' '\n')
           TOTAL=$(echo "$KEYS_NL" | wc -l | tr -d ' ')
-          echo "Found $TOTAL .tar.gz images:"
+          echo "Found $TOTAL tarballs:"
           echo "$KEYS_NL"
 
-          # Keep first 3 (newest). Delete the rest + their .sha256
           if [ "$TOTAL" -le 3 ]; then
             echo "Nothing to delete (<=3 images)."
             exit 0
           fi
 
           TO_DELETE=$(echo "$KEYS_NL" | tail -n +4)
-          echo "Deleting these:"
+          echo "Deleting old tarballs:"
           echo "$TO_DELETE"
 
           while IFS= read -r key; do
             [ -z "$key" ] && continue
             aws s3 rm "s3://$BUCKET/$key" || true
-            aws s3 rm "s3://$BUCKET/${key}.sha256" || true
           done <<< "$TO_DELETE"
 
-      # List objects after cleanup
-      - name: "List objects after cleanup (sha & latest)"
-        if: github.event_name == 'push' && github.ref == 'refs/heads/SathwikB_automate_dockerimgpush'
+      # Shows what remains after cleanup
+      - name: "List objects after cleanup (versions & latest)"
         run: |
-          aws s3 ls "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/sha/"
+          aws s3 ls "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/versions/"
           aws s3 ls "s3://${{ env.S3_BUCKET }}/docker-images/${{ env.APP_NAME }}/dev/latest/"
