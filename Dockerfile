@@ -4,8 +4,8 @@ WORKDIR /workspace
 
 # Cache deps first (faster rebuilds)
 COPY pom.xml ./
-COPY .mvn/ .mvn/
-COPY mvnw .        
+#COPY .mvn/ .mvn/
+#COPY mvnw .        
 RUN mvn -B -DskipTests dependency:go-offline || true
 
 # Build
@@ -26,3 +26,5 @@ USER appuser
 EXPOSE 8080
 ENV JAVA_OPTS=""
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]
+
+# line to check the test run-4
