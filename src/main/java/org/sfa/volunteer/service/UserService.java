@@ -1,9 +1,11 @@
 package org.sfa.volunteer.service;
 
 import org.sfa.volunteer.dto.request.CreateUserRequest;
+import org.sfa.volunteer.dto.request.UpdatePersonalInfoRequest;
 import org.sfa.volunteer.dto.request.UpdateUserProfileRequest;
 import org.sfa.volunteer.dto.response.CreateUserResponse;
 import org.sfa.volunteer.dto.response.PaginationResponse;
+import org.sfa.volunteer.dto.response.PersonalInfoResponse;
 import org.sfa.volunteer.dto.response.UserProfileResponse;
 
 
@@ -18,4 +20,8 @@ public interface UserService {
     CreateUserResponse createUser(CreateUserRequest createUserRequest);
 
     UserProfileResponse updateUserProfile(String userId, UpdateUserProfileRequest updateUserProfileRequest);
+
+    PersonalInfoResponse getPersonalInfoById(String userId);
+
+    PersonalInfoResponse updatePersonalInfo(String userId, UpdatePersonalInfoRequest updatePersonalInfoRequest);
 }

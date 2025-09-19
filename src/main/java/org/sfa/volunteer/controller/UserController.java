@@ -4,9 +4,11 @@ import jakarta.validation.Valid;
 import org.sfa.volunteer.dto.common.SaayamResponse;
 import org.sfa.volunteer.dto.common.SaayamStatusCode;
 import org.sfa.volunteer.dto.request.CreateUserRequest;
+import org.sfa.volunteer.dto.request.UpdatePersonalInfoRequest;
 import org.sfa.volunteer.dto.request.UpdateUserProfileRequest;
 import org.sfa.volunteer.dto.response.CreateUserResponse;
 import org.sfa.volunteer.dto.response.PaginationResponse;
+import org.sfa.volunteer.dto.response.PersonalInfoResponse;
 import org.sfa.volunteer.dto.response.UserProfileResponse;
 import org.sfa.volunteer.service.UserService;
 import org.sfa.volunteer.util.ResponseBuilder;
@@ -72,5 +74,19 @@ public class UserController {
             @RequestBody UpdateUserProfileRequest request) {
         UserProfileResponse response = userService.updateUserProfile(userId, request);
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.USER_ACCOUNT_UPDATED, new Object[]{userId}, response);
+    }
+
+    @GetMapping("/{userId}/personal-info")
+    public SaayamResponse<PersonalInfoResponse> getPersonalInfo(@PathVariable String userId) {
+        PersonalInfoResponse response = userService.getPersonalInfoById(userId);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userId}, response);
+    }
+
+    @PutMapping("/{userId}/personal-info")
+    public SaayamResponse<PersonalInfoResponse> updatePersonalInfo(
+            @PathVariable String userId,
+            @RequestBody UpdatePersonalInfoRequest request) {
+        PersonalInfoResponse response = userService.updatePersonalInfo(userId, request);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.USER_PERSONAL_INFO_UPDATED, new Object[]{userId}, response);
     }
 }

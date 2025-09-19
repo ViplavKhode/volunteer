@@ -1,9 +1,11 @@
 package org.sfa.volunteer.service.impl;
 import jakarta.transaction.Transactional;
 import org.sfa.volunteer.dto.request.CreateUserRequest;
+import org.sfa.volunteer.dto.request.UpdatePersonalInfoRequest;
 import org.sfa.volunteer.dto.request.UpdateUserProfileRequest;
 import org.sfa.volunteer.dto.response.CreateUserResponse;
 import org.sfa.volunteer.dto.response.PaginationResponse;
+import org.sfa.volunteer.dto.response.PersonalInfoResponse;
 import org.sfa.volunteer.dto.response.UserProfileResponse;
 import org.sfa.volunteer.exception.UserCategoryNotFoundException;
 import org.sfa.volunteer.exception.UserNotFoundException;
@@ -180,6 +182,65 @@ public class UserServiceImpl implements UserService {
                 .language3(user.getLanguage3())
                 .promotionWizardStage(user.getVolunteerStage())
                 .promotionWizardLastUpdateDate(user.getVolunteerUpdateDate())
+                .build();
+    }
+
+    @Override
+    public PersonalInfoResponse getPersonalInfoById(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+        return mapToPersonalInfoResponse(user);
+    }
+
+    @Override
+    public PersonalInfoResponse updatePersonalInfo(String userId, UpdatePersonalInfoRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+
+        // Update personal information fields
+        if (request.firstName() != null) {
+            user.setFirstName(request.firstName());
+        }
+        if (request.middleName() != null) {
+            user.setMiddleName(request.middleName());
+        }
+        if (request.lastName() != null) {
+            user.setLastName(request.lastName());
+        }
+        if (request.fullName() != null) {
+            user.setFullName(request.fullName());
+        }
+        if (request.primaryEmailAddress() != null) {
+            user.setPrimaryEmailAddress(request.primaryEmailAddress());
+        }
+        if (request.primaryPhoneNumber() != null) {
+            user.setPrimaryPhoneNumber(request.primaryPhoneNumber());
+        }
+        if (request.timeZone() != null) {
+            user.setTimeZone(request.timeZone());
+        }
+        if (request.gender() != null) {
+            user.setGender(request.gender());
+        }
+
+        user.setLastUpdateDate(ZonedDateTime.now(ZoneId.of("UTC")));
+
+        User updatedUser = userRepository.save(user);
+        return mapToPersonalInfoResponse(updatedUser);
+    }
+
+    private PersonalInfoResponse mapToPersonalInfoResponse(User user) {
+        return PersonalInfoResponse.builder()
+                .id(user.getId())
+                .firstName(user.getFirstName())
+                .middleName(user.getMiddleName())
+                .lastName(user.getLastName())
+                .fullName(user.getFullName())
+                .primaryEmailAddress(user.getPrimaryEmailAddress())
+                .primaryPhoneNumber(user.getPrimaryPhoneNumber())
+                .timeZone(user.getTimeZone())
+                .gender(user.getGender())
+                .lastUpdateDate(user.getLastUpdateDate())
                 .build();
     }
 }
