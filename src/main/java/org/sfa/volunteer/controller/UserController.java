@@ -4,21 +4,16 @@ import jakarta.validation.Valid;
 import org.sfa.volunteer.dto.common.SaayamResponse;
 import org.sfa.volunteer.dto.common.SaayamStatusCode;
 import org.sfa.volunteer.dto.request.CreateUserRequest;
+import org.sfa.volunteer.dto.request.SignOffRequest;
 import org.sfa.volunteer.dto.request.UpdateUserProfileRequest;
 import org.sfa.volunteer.dto.response.CreateUserResponse;
 import org.sfa.volunteer.dto.response.PaginationResponse;
+import org.sfa.volunteer.dto.response.SignOffResponse;
 import org.sfa.volunteer.dto.response.UserProfileResponse;
 import org.sfa.volunteer.service.UserService;
 import org.sfa.volunteer.util.ResponseBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/0.0.1/users")
@@ -72,5 +67,13 @@ public class UserController {
             @RequestBody UpdateUserProfileRequest request) {
         UserProfileResponse response = userService.updateUserProfile(userId, request);
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.USER_ACCOUNT_UPDATED, new Object[]{userId}, response);
+    }
+    @DeleteMapping("/profile/signoff/{userId}")
+    public SaayamResponse<SignOffResponse> signOffUser(@PathVariable String userId,    @RequestBody SignOffRequest request) {
+        SignOffResponse response = userService.signOffUser(userId,  request.reason());
+        return responseBuilder.buildSuccessResponse(
+                SaayamStatusCode.USER_DELETED,
+                new Object[]{userId},
+                response);
     }
 }

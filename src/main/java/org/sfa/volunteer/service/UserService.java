@@ -4,6 +4,7 @@ import org.sfa.volunteer.dto.request.CreateUserRequest;
 import org.sfa.volunteer.dto.request.UpdateUserProfileRequest;
 import org.sfa.volunteer.dto.response.CreateUserResponse;
 import org.sfa.volunteer.dto.response.PaginationResponse;
+import org.sfa.volunteer.dto.response.SignOffResponse;
 import org.sfa.volunteer.dto.response.UserProfileResponse;
 
 
@@ -18,4 +19,6 @@ public interface UserService {
     CreateUserResponse createUser(CreateUserRequest createUserRequest);
 
     UserProfileResponse updateUserProfile(String userId, UpdateUserProfileRequest updateUserProfileRequest);
+
+    SignOffResponse signOffUser(String userId, String reason);
 }

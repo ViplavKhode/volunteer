@@ -4,17 +4,15 @@ import org.sfa.volunteer.dto.request.CreateUserRequest;
 import org.sfa.volunteer.dto.request.UpdateUserProfileRequest;
 import org.sfa.volunteer.dto.response.CreateUserResponse;
 import org.sfa.volunteer.dto.response.PaginationResponse;
+import org.sfa.volunteer.dto.response.SignOffResponse;
 import org.sfa.volunteer.dto.response.UserProfileResponse;
 import org.sfa.volunteer.exception.UserCategoryNotFoundException;
 import org.sfa.volunteer.exception.UserNotFoundException;
 import org.sfa.volunteer.model.User;
 import org.sfa.volunteer.model.UserCategory;
+import org.sfa.volunteer.model.UserSignOffReason;
 import org.sfa.volunteer.model.UserStatus;
-import org.sfa.volunteer.repository.CountryRepository;
-import org.sfa.volunteer.repository.StateRepository;
-import org.sfa.volunteer.repository.UserCategoryRepository;
-import org.sfa.volunteer.repository.UserRepository;
-import org.sfa.volunteer.repository.UserStatusRepository;
+import org.sfa.volunteer.repository.*;
 import org.sfa.volunteer.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -22,6 +20,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
@@ -32,6 +31,7 @@ import java.util.stream.Collectors;
 public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final UserStatusRepository userStatusRepository;
+    private final UserSignOffReasonRepository userSignOffReasonRepository;
 
     private final UserCategoryRepository userCategoryRepository;
     private final CountryRepository countryRepository;
@@ -47,12 +47,13 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     public UserServiceImpl(UserRepository userRepository, UserStatusRepository userStatusRepository, UserCategoryRepository userCategoryRepository,
-                           CountryRepository countryRepository, StateRepository stateRepository) {
+                           CountryRepository countryRepository, StateRepository stateRepository, UserSignOffReasonRepository userSignOffReasonRepository) {
         this.userRepository = userRepository;
         this.userStatusRepository = userStatusRepository;
         this.userCategoryRepository = userCategoryRepository;
         this.countryRepository = countryRepository;
         this.stateRepository = stateRepository;
+        this.userSignOffReasonRepository = userSignOffReasonRepository;
     }
 
     @Override
@@ -181,5 +182,30 @@ public class UserServiceImpl implements UserService {
                 .promotionWizardStage(user.getVolunteerStage())
                 .promotionWizardLastUpdateDate(user.getVolunteerUpdateDate())
                 .build();
+    }
+    @Transactional
+    @Override
+    public SignOffResponse signOffUser(String userId, String reason) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+
+      //if Reason is not null, then save it in UserSignOffReasonRepository
+        if (reason != null && !reason.isEmpty()) {
+            // Here you would save the reason to the UserSignOffReasonRepository
+            userSignOffReasonRepository.save(new UserSignOffReason( reason));
+        }
+
+        // Remove relationships not handled by cascade
+        user.setUserCategory(null);
+        user.setUserStatus(null);
+        user.setCountry(null);
+        user.setState(null);
+
+        userRepository.delete(user);
+
+        return new SignOffResponse(
+                userId,
+                "deleted",
+                Instant.now());
     }
 }
