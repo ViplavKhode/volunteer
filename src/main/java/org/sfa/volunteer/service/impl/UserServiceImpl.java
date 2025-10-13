@@ -4,12 +4,30 @@ import jakarta.transaction.Transactional;
 import org.sfa.volunteer.dto.request.CreateUserRequest;
 import org.sfa.volunteer.dto.request.UpdateOrganizationRequest;
 import org.sfa.volunteer.dto.request.UpdateUserProfileRequest;
-import org.sfa.volunteer.dto.response.*;
+import org.sfa.volunteer.dto.response.AddressStatusResponse;
+import org.sfa.volunteer.dto.response.CreateUserResponse;
+import org.sfa.volunteer.dto.response.OrganizationResponse;
+import org.sfa.volunteer.dto.response.PaginationResponse;
+import org.sfa.volunteer.dto.response.SignOffResponse;
+import org.sfa.volunteer.dto.response.UserProfileResponse;
+import org.sfa.volunteer.dto.response.WizardStatusResponse;
 import org.sfa.volunteer.exception.UserCategoryNotFoundException;
 import org.sfa.volunteer.exception.UserNotFoundException;
 import org.sfa.volunteer.exception.UserOrganizationNotFoundException;
-import org.sfa.volunteer.model.*;
-import org.sfa.volunteer.repository.*;
+import org.sfa.volunteer.model.Country;
+import org.sfa.volunteer.model.Organization;
+import org.sfa.volunteer.model.State;
+import org.sfa.volunteer.model.User;
+import org.sfa.volunteer.model.UserCategory;
+import org.sfa.volunteer.model.UserSignOffReason;
+import org.sfa.volunteer.model.UserStatus;
+import org.sfa.volunteer.repository.CountryRepository;
+import org.sfa.volunteer.repository.OrganizationRepository;
+import org.sfa.volunteer.repository.StateRepository;
+import org.sfa.volunteer.repository.UserCategoryRepository;
+import org.sfa.volunteer.repository.UserRepository;
+import org.sfa.volunteer.repository.UserSignOffReasonRepository;
+import org.sfa.volunteer.repository.UserStatusRepository;
 import org.sfa.volunteer.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -17,6 +35,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
@@ -25,10 +44,11 @@ import java.util.stream.Collectors;
 @Service
 @Transactional
 public class UserServiceImpl implements UserService {
+
     private final UserRepository userRepository;
     private final UserStatusRepository userStatusRepository;
     private final OrganizationRepository organizationRepository;
-
+    private final UserSignOffReasonRepository userSignOffReasonRepository;
     private final UserCategoryRepository userCategoryRepository;
     private final CountryRepository countryRepository;
     private final StateRepository stateRepository;
@@ -36,20 +56,27 @@ public class UserServiceImpl implements UserService {
     private static final int DEFAULT_PAGE = 0;
     private static final int DEFAULT_SIZE = 10;
 
-    // Default IDs for user status and category
-    private static final Integer DEFAULT_USER_STATUS_ID = 1; // Active user
-    private static final Integer DEFAULT_USER_CATEGORY_ID = 1; // User Category: common user
-    private static final Integer VOLUNTEER_CATEGORY_ID = 2; // User Category: volunteer
+    private static final Integer DEFAULT_USER_STATUS_ID = 1;
+    private static final Integer DEFAULT_USER_CATEGORY_ID = 1;
+    private static final Integer VOLUNTEER_CATEGORY_ID = 2;
 
     @Autowired
-    public UserServiceImpl(UserRepository userRepository, UserStatusRepository userStatusRepository, OrganizationRepository organizationRepository, UserCategoryRepository userCategoryRepository,
-                           CountryRepository countryRepository, StateRepository stateRepository) {
+    public UserServiceImpl(
+            UserRepository userRepository,
+            UserStatusRepository userStatusRepository,
+            OrganizationRepository organizationRepository,
+            UserCategoryRepository userCategoryRepository,
+            CountryRepository countryRepository,
+            StateRepository stateRepository,
+            UserSignOffReasonRepository userSignOffReasonRepository) {
+
         this.userRepository = userRepository;
         this.userStatusRepository = userStatusRepository;
         this.organizationRepository = organizationRepository;
         this.userCategoryRepository = userCategoryRepository;
         this.countryRepository = countryRepository;
         this.stateRepository = stateRepository;
+        this.userSignOffReasonRepository = userSignOffReasonRepository;
     }
 
     @Override
@@ -64,7 +91,6 @@ public class UserServiceImpl implements UserService {
         Country country = countryRepository.findByCountryName(request.country())
                 .orElseThrow(() -> new UserCategoryNotFoundException(DEFAULT_USER_CATEGORY_ID));
 
-        // Create a new User entity from the request data
         User user = User.builder()
                 .fullName(request.name())
                 .primaryEmailAddress(request.email())
@@ -76,14 +102,12 @@ public class UserServiceImpl implements UserService {
                 .country(country)
                 .build();
 
-        // Save the User entity to the database
         user = userRepository.save(user);
 
-        // Create a response object from the saved User entity
         return CreateUserResponse.builder()
                 .name(user.getFullName())
                 .email(user.getPrimaryEmailAddress())
-                .phoneNumber(user.getPrimaryEmailAddress())
+                .phoneNumber(user.getPrimaryPhoneNumber())
                 .timeZone(user.getTimeZone())
                 .userId(user.getId())
                 .countryName(user.getCountry() != null ? user.getCountry().getCountryName() : null)
@@ -95,7 +119,6 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
-        // Update all fields from the request without null checks
         user.setFirstName(request.firstName());
         user.setMiddleName(request.middleName());
         user.setLastName(request.lastName());
@@ -145,33 +168,30 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public WizardStatusResponse getWizardStatus(String userId) {
-    UserProfileResponse userProfile = getUserProfileById(userId);
+        UserProfileResponse userProfile = getUserProfileById(userId);
 
-    String addressAvailable = (userProfile.addressLine1() != null && !userProfile.addressLine1().trim().isEmpty())
-            ? "Y" : "N";
+        String addressAvailable = (userProfile.addressLine1() != null && !userProfile.addressLine1().trim().isEmpty())
+                ? "Y" : "N";
 
-    return new WizardStatusResponse(
-        userId,
-        userProfile.promotionWizardStage(),
-        addressAvailable
-    );
-}
-    
+        return new WizardStatusResponse(
+                userId,
+                userProfile.promotionWizardStage(),
+                addressAvailable
+        );
+    }
+
     @Override
     public AddressStatusResponse getAddressStatus(String userId) {
-    UserProfileResponse userProfile = getUserProfileById(userId);
+        UserProfileResponse userProfile = getUserProfileById(userId);
 
-    String addressAvailable = (userProfile.addressLine1() != null && !userProfile.addressLine1().trim().isEmpty())
-            ? "Y" : "N";
+        String addressAvailable = (userProfile.addressLine1() != null && !userProfile.addressLine1().trim().isEmpty())
+                ? "Y" : "N";
 
-    return new AddressStatusResponse(
-        userId,
-        addressAvailable
-    );
-}
-
-
-
+        return new AddressStatusResponse(
+                userId,
+                addressAvailable
+        );
+    }
 
     @Override
     public UserProfileResponse getUserProfileByEmail(String email) {
@@ -264,7 +284,6 @@ public class UserServiceImpl implements UserService {
         return OrganizationResponse.builder()
                 .id(organization.getId())
                 .organizationName(organization.getOrganizationName())
-                .organizationName(organization.getOrganizationName())
                 .organizationType(organization.getOrganizationType())
                 .phoneNumber(organization.getPhoneNumber())
                 .email(organization.getEmail())
@@ -277,5 +296,27 @@ public class UserServiceImpl implements UserService {
                 .build();
     }
 
+    @Transactional
+    @Override
+    public SignOffResponse signOffUser(String userId, String reason) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
 
+        if (reason != null && !reason.isEmpty()) {
+            userSignOffReasonRepository.save(new UserSignOffReason(reason));
+        }
+
+        user.setUserCategory(null);
+        user.setUserStatus(null);
+        user.setCountry(null);
+        user.setState(null);
+
+        userRepository.delete(user);
+
+        return new SignOffResponse(
+                userId,
+                "deleted",
+                Instant.now()
+        );
+    }
 }

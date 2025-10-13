@@ -6,7 +6,14 @@ import org.sfa.volunteer.dto.common.SaayamStatusCode;
 import org.sfa.volunteer.dto.request.CreateUserRequest;
 import org.sfa.volunteer.dto.request.UpdateOrganizationRequest;
 import org.sfa.volunteer.dto.request.UpdateUserProfileRequest;
-import org.sfa.volunteer.dto.response.*;
+import org.sfa.volunteer.dto.request.SignOffRequest;
+import org.sfa.volunteer.dto.response.AddressStatusResponse;
+import org.sfa.volunteer.dto.response.CreateUserResponse;
+import org.sfa.volunteer.dto.response.OrganizationResponse;
+import org.sfa.volunteer.dto.response.PaginationResponse;
+import org.sfa.volunteer.dto.response.SignOffResponse;
+import org.sfa.volunteer.dto.response.UserProfileResponse;
+import org.sfa.volunteer.dto.response.WizardStatusResponse;
 import org.sfa.volunteer.service.UserService;
 import org.sfa.volunteer.util.ResponseBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,8 +21,8 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/0.0.1/users")
-
 public class UserController {
+
     private final UserService userService;
     private final ResponseBuilder responseBuilder;
 
@@ -57,12 +64,12 @@ public class UserController {
         WizardStatusResponse response = userService.getWizardStatus(userId);
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userId}, response);
     }
-    
+
     @GetMapping("/addressStatus/{userId}")
     public SaayamResponse<AddressStatusResponse> getAddressStatus(@PathVariable String userId) {
-    	AddressStatusResponse response = userService.getAddressStatus(userId);
+        AddressStatusResponse response = userService.getAddressStatus(userId);
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userId}, response);
-    } 
+    }
 
     @GetMapping("/login/{email}")
     public SaayamResponse<UserProfileResponse> getUserProfileAfterLogin(@PathVariable String email) {
@@ -92,4 +99,17 @@ public class UserController {
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userId}, organization);
     }
 
+    @DeleteMapping("/profile/signoff/{userId}")
+    public SaayamResponse<SignOffResponse> signOffUser(
+            @PathVariable String userId,
+            @RequestBody SignOffRequest request) {
+
+        SignOffResponse response = userService.signOffUser(userId, request.reason());
+
+        return responseBuilder.buildSuccessResponse(
+                SaayamStatusCode.USER_DELETED,
+                new Object[]{userId},
+                response
+        );
+    }
 }
