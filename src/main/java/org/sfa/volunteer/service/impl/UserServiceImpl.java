@@ -28,10 +28,12 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final UserStatusRepository userStatusRepository;
     private final OrganizationRepository organizationRepository;
-
     private final UserCategoryRepository userCategoryRepository;
     private final CountryRepository countryRepository;
     private final StateRepository stateRepository;
+    private final VolunteerRepository volunteerRepository;
+    private final UserAdditionalDetailRepository userAdditionalDetailRepository;
+    private final VolunteerUserAvailabilityRepository volunteerUserAvailabilityRepository;
 
     private static final int DEFAULT_PAGE = 0;
     private static final int DEFAULT_SIZE = 10;
@@ -43,13 +45,16 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     public UserServiceImpl(UserRepository userRepository, UserStatusRepository userStatusRepository, OrganizationRepository organizationRepository, UserCategoryRepository userCategoryRepository,
-                           CountryRepository countryRepository, StateRepository stateRepository) {
+                           CountryRepository countryRepository, StateRepository stateRepository, VolunteerRepository volunteerRepository, UserAdditionalDetailRepository userAdditionalDetailRepository, VolunteerUserAvailabilityRepository volunteerUserAvailabilityRepository) {
         this.userRepository = userRepository;
         this.userStatusRepository = userStatusRepository;
         this.organizationRepository = organizationRepository;
         this.userCategoryRepository = userCategoryRepository;
         this.countryRepository = countryRepository;
         this.stateRepository = stateRepository;
+        this.volunteerRepository = volunteerRepository;
+        this.userAdditionalDetailRepository = userAdditionalDetailRepository;
+        this.volunteerUserAvailabilityRepository = volunteerUserAvailabilityRepository;
     }
 
     @Override
@@ -274,6 +279,59 @@ public class UserServiceImpl implements UserService {
                 .city(organization.getCity())
                 .state(organization.getState())
                 .zipCode(organization.getZipCode())
+                .build();
+    }
+
+    @Override
+    public SignOutResponse signOut(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+
+        
+        Volunteer volunteer = volunteerRepository.findVolunteerByUserId(userId);
+        if (volunteer != null) {
+            volunteerRepository.delete(volunteer);
+        }
+
+        userAdditionalDetailRepository.findAll().stream()
+                .filter(detail -> detail.getUser().getId().equals(userId))
+                .forEach(detail -> userAdditionalDetailRepository.delete(detail));
+
+        // 3. Delete organization details if exists
+        organizationRepository.findByUserId(userId)
+                .ifPresent(organization -> organizationRepository.delete(organization));
+
+        List<VolunteerUserAvailability> availabilityRecords = volunteerUserAvailabilityRepository.findUserAvailability(userId);
+        if (!availabilityRecords.isEmpty()) {
+            volunteerUserAvailabilityRepository.deleteAll(availabilityRecords);
+        }
+
+        user.setFirstName(null);
+        user.setMiddleName(null);
+        user.setLastName(null);
+        user.setPrimaryEmailAddress(null);
+        user.setPrimaryPhoneNumber(null);
+        user.setProfilePicturePath(null);
+        user.setAddressLine1(null);
+        user.setAddressLine2(null);
+        user.setAddressLine3(null);
+        user.setCity(null);
+        user.setZipCode(null);
+        user.setGender(null);
+        user.setLastLocation(null);
+        user.setLanguage1(null);
+        user.setLanguage2(null);
+        user.setLanguage3(null);
+        user.setVolunteerStage(null);
+        user.setVolunteerUpdateDate(null);
+        user.setLastUpdateDate(ZonedDateTime.now(ZoneId.of("UTC")));
+
+        userRepository.save(user);
+
+        return SignOutResponse.builder()
+                .message("User signed out successfully and all user data cleared")
+                .signOutTime(ZonedDateTime.now(ZoneId.of("UTC")))
+                .success(true)
                 .build();
     }
 

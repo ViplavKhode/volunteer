@@ -27,4 +27,6 @@ public interface UserService {
 
     OrganizationResponse getOrganizationByUserId(String userId);
 
+    SignOutResponse signOut(String userId);
+
 }
