@@ -92,4 +92,10 @@ public class UserController {
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userId}, organization);
     }
 
+    @PostMapping("/signout/{userId}")
+    public SaayamResponse<SignOutResponse> signOut(@PathVariable String userId) {
+        SignOutResponse response = userService.signOut(userId);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.USER_SIGNED_OUT, new Object[]{userId}, response);
+    }
+
 }
