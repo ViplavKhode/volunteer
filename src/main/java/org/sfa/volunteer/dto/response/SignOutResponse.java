@@ -16,3 +16,4 @@ public class SignOutResponse {
     private ZonedDateTime signOutTime;
     private boolean success;
 }
+
