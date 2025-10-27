@@ -175,9 +175,6 @@ public class UserServiceImpl implements UserService {
     );
 }
 
-
-
-
     @Override
     public UserProfileResponse getUserProfileByEmail(String email) {
         List<User> user = userRepository.findByPrimaryEmailAddress(email);
@@ -334,6 +331,5 @@ public class UserServiceImpl implements UserService {
                 .success(true)
                 .build();
     }
-
 
 }
