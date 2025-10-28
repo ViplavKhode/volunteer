@@ -24,14 +24,8 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 // Profile Pic Upload.
 import org.springframework.core.env.Environment;
-import org.apache.commons.io.FilenameUtils;
-import software.amazon.awssdk.services.s3.model.GetObjectRequest;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
-import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
-import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import java.util.Optional;
 
 @Service
@@ -296,87 +290,6 @@ public class UserServiceImpl implements UserService {
                 .build();
     }
     // Profile Pic Upload
-    // MinIO POC
-    @Deprecated
-    @Override
-    public String computeProfilePicKey(String userId, String fileName) {
-        String ext = java.util.Optional.ofNullable(FilenameUtils.getExtension(fileName)).orElse("jpg").toLowerCase();
-        return "profile-pics/" + userId + "/" + java.util.UUID.randomUUID() + "." + ext;
-    }
-
-    @Deprecated
-    @Override
-    public PresignedPutObjectRequest presignProfilePicPut(String key, String contentType) {
-        // simple validation to avoid bad types
-        if (!( "image/png".equals(contentType) ||
-                "image/jpeg".equals(contentType) ||
-                "image/webp".equals(contentType))) {
-            throw new IllegalArgumentException("Unsupported content type: " + contentType);
-        }
-
-        final String bucket = env.getProperty("minio.bucket", "saayam-local-private");
-
-        PutObjectRequest put = PutObjectRequest.builder()
-                .bucket(bucket)
-                .key(key)
-                .contentType(contentType)
-                .build();
-
-        return s3Presigner.presignPutObject(r -> r
-                .putObjectRequest(put)
-                .signatureDuration(java.time.Duration.ofMinutes(10)));
-    }
-
-    @Deprecated
-    @Override
-    public PresignedGetObjectRequest presignProfilePicGet(String key) {
-        final String bucket = env.getProperty("minio.bucket", "saayam-local-private");
-
-        GetObjectRequest get = GetObjectRequest.builder()
-                .bucket(bucket)
-                .key(key)
-                .build();
-
-        return s3Presigner.presignGetObject(r -> r
-                .getObjectRequest(get)
-                .signatureDuration(java.time.Duration.ofMinutes(5)));
-    }
-
-    @Deprecated
-    @Override
-    public void finalizeProfilePic(String userId, String newKey) {
-       String oldKey = null;
-        if (oldKey != null && !oldKey.equals(newKey)) {
-            final String bucket = env.getProperty("minio.bucket", "saayam-local-private");
-            try {
-                s3Client.deleteObject(DeleteObjectRequest.builder()
-                        .bucket(bucket)
-                        .key(oldKey)
-                        .build());
-            } catch (Exception ignore) {
-            }
-        }
-    }
-
-    @Deprecated
-    @Override
-    public void deleteProfilePic(String userId) {
-        // 1) load current key
-        String key = null;
-        if (key == null) {
-            return;
-        }
-
-        final String bucket = env.getProperty("minio.bucket", "saayam-local-private");
-        try {
-            s3Client.deleteObject(DeleteObjectRequest.builder()
-                    .bucket(bucket)
-                    .key(key)
-                    .build());
-        } catch (Exception ignore) {
-            // best-effort
-        }
-    }
     // S3 URI <-> DB //
     @Override
     public void setProfilePicturePath(String userId, String s3Uri) {

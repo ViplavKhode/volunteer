@@ -14,12 +14,7 @@ spring:
       ddl-auto: none
     open-in-view: false
 
-# ── Profile Pic Upload (shared across local & AWS) ─────────────────────────────
-#minio:
-#  endpoint: "http://127.0.0.1:9000"
-#  accessKey: "minioadmin"
-#  secretKey: "minioadmin"
-
+# ── Profile Pic Upload (shared across AWS) ─────────────────────────────
 saayam:
   s3:
     regions:
@@ -28,9 +23,7 @@ saayam:
     buckets:
       euPrivate: "saayam-ireland-private-devsuraj"
       usPrivate: "saayam-virginia-private-devsuraj"
-#    buckets:
-#            euPrivate: "sfa-volunteer-eu-private"
-#            usPrivate: "sfa-volunteer-us-private"
+
     presign:
       getTtlSeconds: 300
       putTtlSeconds: 300

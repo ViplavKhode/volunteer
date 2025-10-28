@@ -11,40 +11,8 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 @Configuration
 @RequiredArgsConstructor
-//@ConditionalOnProperty(name = "minio.endpoint") // only active when env MINIO_ENDPOINT is set
 public class S3Config {
     private final Environment env;
-
-//    Local MinIO   //
-//    private String get(String key, String def) {
-//        String v = env.getProperty("minio." + key);
-//        return (v != null && !v.isBlank()) ? v : def;
-//    }
-//
-//    @Bean
-//    public S3Client s3Client() {
-//        return S3Client.builder()
-//                .endpointOverride(URI.create(get("endpoint", "http://127.0.0.1:9000")))
-//                .region(Region.US_EAST_1)
-//                .forcePathStyle(true)
-//                .credentialsProvider(StaticCredentialsProvider.create(
-//                        AwsBasicCredentials.create(
-//                                get("accessKey", "minioadmin"),
-//                                get("secretKey", "minioadmin"))))
-//                .build();
-//    }
-//
-//    @Bean
-//    public S3Presigner s3Presigner() {
-//        return S3Presigner.builder()
-//                .endpointOverride(URI.create(get("endpoint", "http://127.0.0.1:9000")))
-//                .region(Region.US_EAST_1)
-//                .credentialsProvider(StaticCredentialsProvider.create(
-//                        AwsBasicCredentials.create(
-//                                get("accessKey", "minioadmin"),
-//                                get("secretKey", "minioadmin"))))
-//                .build();
-//    }
 
     // AWS
     @Bean

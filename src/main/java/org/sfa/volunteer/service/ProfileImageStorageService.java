@@ -17,7 +17,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
-//@RequiredArgsConstructor
 public class ProfileImageStorageService {
 
     private final UserService userService;
@@ -42,14 +41,26 @@ public class ProfileImageStorageService {
         this.s3PresignerEu = s3PresignerEu;
     }
 
-    // ── Config (from application.yaml) ─────────────────────────────────────────
-    @Value("${saayam.s3.buckets.euPrivate}") private String euBucket;
-    @Value("${saayam.s3.buckets.usPrivate}") private String usBucket;
-    @Value("${saayam.s3.presign.getTtlSeconds:300}") private int getTtlSeconds;
-    @Value("${saayam.s3.presign.putTtlSeconds:300}") private int putTtlSeconds;
-    @Value("${saayam.s3.maxBytes:5242880}") private long maxBytes;
-    @Value("${saayam.s3.allowedMime:image/jpeg}") private String allowedMimeCsv;
-    @Value("${saayam.s3.keyPattern:users/%s/profile.jpg}") private String keyPattern;
+    @Value("${saayam.s3.buckets.euPrivate}")
+    private String euBucket;
+
+    @Value("${saayam.s3.buckets.usPrivate}")
+    private String usBucket;
+
+    @Value("${saayam.s3.presign.getTtlSeconds:300}")
+    private int getTtlSeconds;
+
+    @Value("${saayam.s3.presign.putTtlSeconds:300}")
+    private int putTtlSeconds;
+
+    @Value("${saayam.s3.maxBytes:2097152}")
+    private long maxBytes;
+
+    @Value("${saayam.s3.allowedMime:image/jpeg,image/png,image/webp}")
+    private String allowedMimeCsv;
+
+    @Value("${saayam.s3.keyPattern:users/%s/profile%s}")
+    private String keyPattern;
 
     // Local memory cache
     private final Map<String, String> keyByUser = new ConcurrentHashMap<>();
@@ -89,16 +100,13 @@ public class ProfileImageStorageService {
             var uriOpt = userService.getProfilePicturePath(userId);
             if (uriOpt.isEmpty()) return Optional.empty();
 
-            // parse s3://bucket/key
             var uri = URI.create(uriOpt.get());
-            // SchemeSpecificPart looks like "saayam-.../users/<id>/profile.jpg"
             String ssp = uri.getSchemeSpecificPart();
             int slash = ssp.indexOf('/');
             if (slash < 0) return Optional.empty();
             bucket = ssp.substring(0, slash);
             key    = ssp.substring(slash + 1);
 
-            // derive region from bucket name if caller didn't pass a hint
             if (regionHint == null || regionHint.isBlank()) {
                 if (bucket.equals(euBucket))       regionHint = "eu-west-1";
                 else if (bucket.equals(usBucket))  regionHint = "us-east-1";
@@ -159,13 +167,6 @@ public class ProfileImageStorageService {
                     "Max upload size is 5 MB.");
         }
     }
-    // ----- helpers -----
-//    private String pickBucket(String regionHint) {
-//        // tonight: "eu-west-1" -> EU bucket, anything else -> US bucket
-//        if (regionHint != null && regionHint.trim().equals("eu-west-1")) return euBucket;
-//        return usBucket;
-//    }
-
 
     private String buildKey(String userId, String mime) {
         return String.format(keyPattern, userId);
