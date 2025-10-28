@@ -13,3 +13,27 @@ spring:
     hibernate:
       ddl-auto: none
     open-in-view: false
+
+# ── Profile Pic Upload (shared across local & AWS) ─────────────────────────────
+#minio:
+#  endpoint: "http://127.0.0.1:9000"
+#  accessKey: "minioadmin"
+#  secretKey: "minioadmin"
+
+saayam:
+  s3:
+    regions:
+      eu: "eu-west-1"   # Ireland
+      us: "us-east-1"   # N. Virginia
+    buckets:
+      euPrivate: "saayam-ireland-private-devsuraj"
+      usPrivate: "saayam-virginia-private-devsuraj"
+#    buckets:
+#            euPrivate: "sfa-volunteer-eu-private"
+#            usPrivate: "sfa-volunteer-us-private"
+    presign:
+      getTtlSeconds: 300
+      putTtlSeconds: 300
+    maxBytes: 5242880 # 5 MB
+    allowedMime: "image/jpeg,image/png,image/webp"            # enforce JPG
+    keyPattern: "users/%s/profile.jpg"   # exact path
