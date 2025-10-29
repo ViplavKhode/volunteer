@@ -46,23 +46,16 @@ public class UserServiceImpl implements UserService {
     private static final Integer DEFAULT_USER_STATUS_ID = 1; // Active user
     private static final Integer DEFAULT_USER_CATEGORY_ID = 1; // User Category: common user
     private static final Integer VOLUNTEER_CATEGORY_ID = 2; // User Category: volunteer
-    // Profile Pic Upload
-    private final S3Presigner s3Presigner;
-    private final Environment env;
-    private final S3Client s3Client;
 
     @Autowired
     public UserServiceImpl(UserRepository userRepository, UserStatusRepository userStatusRepository, OrganizationRepository organizationRepository, UserCategoryRepository userCategoryRepository,
-                           CountryRepository countryRepository, StateRepository stateRepository, S3Presigner s3Presigner, Environment env, S3Client s3Client) {
+                           CountryRepository countryRepository, StateRepository stateRepository) {
         this.userRepository = userRepository;
         this.userStatusRepository = userStatusRepository;
         this.organizationRepository = organizationRepository;
         this.userCategoryRepository = userCategoryRepository;
         this.countryRepository = countryRepository;
         this.stateRepository = stateRepository;
-        this.s3Presigner = s3Presigner;
-        this.env = env;
-        this.s3Client = s3Client;
     }
 
     @Override
