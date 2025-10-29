@@ -1,4 +1,5 @@
 package org.sfa.volunteer.model;
+
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -7,6 +8,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.MapsId;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -15,7 +17,11 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.Objects;
+
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Data
@@ -26,11 +32,11 @@ import java.util.Objects;
 
 public class Volunteer {
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE)
-    @Column(name = "volunteer_detail_id", nullable = false)
-    private Integer id;
+    @Column(name = "user_id")
+    private String id;
 
     @OneToOne(fetch = FetchType.LAZY)
+    @MapsId
     @JoinColumn(name = "user_id", nullable = false)
     @JsonBackReference
     private User user;
@@ -41,14 +47,15 @@ public class Volunteer {
     @Column(name = "terms_and_conditions_update_date")
     private ZonedDateTime tcUpdateDate;
 
-    @Column(name = "govt_id")
+    @Column(name = "govt_id_path")
     private String govtIdFilename;
 
     @Column(name = "govt_id_update_date")
     private ZonedDateTime govtUpdateDate;
 
     @Column(name = "skills")
-    private String skills;
+    @JdbcTypeCode(SqlTypes.JSON)
+    private List<String> skills;
 
     @Column(name = "notification")
     private Boolean notification;
@@ -77,8 +84,10 @@ public class Volunteer {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         Volunteer volunteer = (Volunteer) o;
         return Objects.equals(id, volunteer.id) &&
                 Objects.equals(user, volunteer.user) &&
@@ -94,6 +103,7 @@ public class Volunteer {
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, user, termsAndConditions, tcUpdateDate, govtIdFilename, govtUpdateDate, skills, notification, isCompleted, completedDate );
+        return Objects.hash(id, user, termsAndConditions, tcUpdateDate, govtIdFilename, govtUpdateDate, skills,
+                notification, isCompleted, completedDate);
     }
 }
