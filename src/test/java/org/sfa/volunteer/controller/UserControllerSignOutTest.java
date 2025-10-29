@@ -40,7 +40,6 @@ class UserControllerSignOutTest {
     @Test
     @DisplayName("Test sign-out endpoint - successful sign-out")
     void testSignOutEndpoint_Success() throws Exception {
-        // Arrange
         SignOutResponse signOutResponse = SignOutResponse.builder()
                 .message("User signed out successfully and all user data cleared")
                 .signOutTime(ZonedDateTime.now())
@@ -50,7 +49,6 @@ class UserControllerSignOutTest {
         when(userService.signOut(testUserId)).thenReturn(signOutResponse);
         when(responseBuilder.buildSuccessResponse(any(), any(), any())).thenReturn(null);
 
-        // Act & Assert
         mockMvc.perform(post("/0.0.1/users/signout/{userId}", testUserId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .accept(MediaType.APPLICATION_JSON))
@@ -63,11 +61,9 @@ class UserControllerSignOutTest {
     @Test
     @DisplayName("Test sign-out endpoint - user not found")
     void testSignOutEndpoint_UserNotFound() throws Exception {
-        // Arrange
         when(userService.signOut(testUserId))
                 .thenThrow(new org.sfa.volunteer.exception.UserNotFoundException(testUserId));
 
-        // Act & Assert
         mockMvc.perform(post("/0.0.1/users/signout/{userId}", testUserId)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound());
@@ -76,7 +72,6 @@ class UserControllerSignOutTest {
     @Test
     @DisplayName("Test sign-out endpoint - with different user IDs")
     void testSignOutEndpoint_DifferentUserIds() throws Exception {
-        // Arrange
         String[] testUserIds = {"user-1", "user-999", "test-abc-123"};
         
         for (String userId : testUserIds) {
@@ -89,7 +84,6 @@ class UserControllerSignOutTest {
             when(userService.signOut(userId)).thenReturn(signOutResponse);
             when(responseBuilder.buildSuccessResponse(any(), any(), any())).thenReturn(null);
 
-            // Act & Assert
             mockMvc.perform(post("/0.0.1/users/signout/{userId}", userId)
                             .contentType(MediaType.APPLICATION_JSON))
                     .andExpect(status().isOk());
@@ -99,7 +93,6 @@ class UserControllerSignOutTest {
     @Test
     @DisplayName("Test sign-out endpoint - accepts JSON content type")
     void testSignOutEndpoint_AcceptsJson() throws Exception {
-        // Arrange
         SignOutResponse signOutResponse = SignOutResponse.builder()
                 .message("User signed out successfully and all user data cleared")
                 .signOutTime(ZonedDateTime.now())
@@ -109,7 +102,6 @@ class UserControllerSignOutTest {
         when(userService.signOut(testUserId)).thenReturn(signOutResponse);
         when(responseBuilder.buildSuccessResponse(any(), any(), any())).thenReturn(null);
 
-        // Act & Assert
         mockMvc.perform(post("/0.0.1/users/signout/{userId}", testUserId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .accept(MediaType.APPLICATION_JSON))
