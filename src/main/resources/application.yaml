@@ -14,19 +14,21 @@ spring:
       ddl-auto: none
     open-in-view: false
 
-# ── Profile Pic Upload (shared across AWS) ─────────────────────────────
-saayam:
-  s3:
-    regions:
-      eu: "eu-west-1"   # Ireland
-      us: "us-east-1"   # N. Virginia
-    buckets:
-      euPrivate: "saayam-ireland-private-devsuraj"
-      usPrivate: "saayam-virginia-private-devsuraj"
-
-    presign:
-      getTtlSeconds: 300
-      putTtlSeconds: 300
-    maxBytes: 5242880 # 5 MB
-    allowedMime: "image/jpeg,image/png,image/webp"            # enforce JPG
-    keyPattern: "users/%s/profile.jpg"   # exact path
+## ── Profile Pic Upload (shared across AWS) ─────────────────────────────
+#saayam:
+#  s3:
+#    regions:
+#      eu: "eu-west-1"   # Ireland
+#      us: "us-east-1"   # N. Virginia
+#    buckets:
+#      euPrivate: "saayam-ireland-private"
+#      usPrivate: "saayam-virginia-private"
+##      euPrivate: "saayam-ireland-private-devsuraj"
+##      usPrivate: "saayam-virginia-private-devsuraj"
+#
+#    presign:
+#      getTtlSeconds: 300
+#      putTtlSeconds: 300
+#    maxBytes: 5242880 # 5 MB
+#    allowedMime: "image/jpeg,image/png,image/webp"            # enforce JPG
+#    keyPattern: "users/%s/profile.jpg"   # exact path

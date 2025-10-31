@@ -11,13 +11,17 @@ import org.sfa.volunteer.service.ProfileImageStorageService;
 import org.sfa.volunteer.service.UserService;
 import org.sfa.volunteer.util.ResponseBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
+import java.net.URI;
 import java.util.Map;
 
 @RestController
@@ -110,8 +114,8 @@ public class UserController {
     }
 
     private String regionHint(HttpServletRequest req) {
-        // TODO: User Region from Login Payload -
-        return req.getHeader("X-Dev-Region"); // "eu-west-1" or "us-east-1"
+        String r = req.getHeader("X-Dev-Region");
+        return (r == null || r.isBlank()) ? "us-east-1" : r;
     }
 
     /* . */
@@ -185,6 +189,17 @@ public class UserController {
     public SaayamResponse<Map<String, String>> deleteProfileImage(HttpServletRequest req) {
         profileImageStorageService.delete(currentUserId(req), regionHint(req));
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, Map.of("message", "Profile image deleted"));
+    }
+
+    // new API - Upload
+    @PostMapping(value = "/me/profile-image",
+            consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public SaayamResponse<Map<String, Object>> uploadProfileImage(
+            @RequestPart("file") org.springframework.web.multipart.MultipartFile file,
+            jakarta.servlet.http.HttpServletRequest req) throws java.io.IOException {
+        var payload = profileImageStorageService.uploadMultipart(
+                currentUserId(req), file, regionHint(req));
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, payload);
     }
 
 }

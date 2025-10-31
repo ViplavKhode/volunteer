@@ -22,10 +22,6 @@ import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
-// Profile Pic Upload.
-import org.springframework.core.env.Environment;
-import software.amazon.awssdk.services.s3.presigner.S3Presigner;
-import software.amazon.awssdk.services.s3.S3Client;
 import java.util.Optional;
 
 @Service
