@@ -11,17 +11,11 @@ import org.sfa.volunteer.service.ProfileImageStorageService;
 import org.sfa.volunteer.service.UserService;
 import org.sfa.volunteer.util.ResponseBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-
-import java.net.URI;
 import java.util.Map;
 
 @RestController
@@ -30,7 +24,11 @@ import java.util.Map;
 public class UserController {
     private final UserService userService;
     private final ResponseBuilder responseBuilder;
+
     private final ProfileImageStorageService profileImageStorageService;
+    private static final String HDR_DEV_UID = "X-Dev-UserId";
+    private static final String HDR_REGION  = "X-Dev-Region";
+
 
     @Autowired
     public UserController(UserService userService, ResponseBuilder responseBuilder, ProfileImageStorageService profileImageStorageService) {
@@ -106,92 +104,26 @@ public class UserController {
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userId}, organization);
     }
     /* Profile Pic Upload */
+    // Helper
     private String currentUserId(HttpServletRequest req) {
-        // TODO: User Id from Login Payload -
-        String override = req.getHeader("X-Dev-UserId");
+        // Login Payload
+        String override = req.getHeader(HDR_DEV_UID);
         if (override != null && !override.isBlank()) return override;
         return "11111111-1111-1111-1111-111111111111";
     }
-
     private String regionHint(HttpServletRequest req) {
-        String r = req.getHeader("X-Dev-Region");
+        String r = req.getHeader(HDR_REGION);
         return (r == null || r.isBlank()) ? "us-east-1" : r;
     }
 
-    /* . */
-    @GetMapping("/me/bootstrap")
-    public SaayamResponse<Map<String, Object>> bootstrapMe(HttpServletRequest req) {
-        String email = req.getHeader("X-Auth-Email");
-        String userIdOverride = req.getHeader("X-Dev-UserId");
-        String region = req.getHeader("X-Dev-Region"); // "eu-west-1" | "us-east-1"
-
-        UserProfileResponse user;
-        if (email != null && !email.isBlank()) {
-            user = userService.getUserProfileByEmail(email);
-        } else if (userIdOverride != null && !userIdOverride.isBlank()) {
-            user = userService.getUserProfileById(userIdOverride);
-        } else {
-            return responseBuilder.buildErrorResponse(
-                    HttpStatus.BAD_REQUEST.value(),
-                    SaayamStatusCode.BAD_REQUEST,
-                    "Missing identity (X-Auth-Email or X-Dev-UserId)"
-            );
-        }
-
-        String uid = user.id();
-        var presignedOpt = profileImageStorageService.presignView(uid, region);
-
-        // Use a map that allows nulls
-        Map<String, Object> payload = new java.util.LinkedHashMap<>();
-        payload.put("userId", uid);
-        payload.put("fullName", user.fullName());          // may be null → allowed
-        payload.put("email", user.emailAddress());         // may be null → allowed
-        payload.put("hasImage", presignedOpt.isPresent());
-        payload.put("profileImageUrl", presignedOpt.map(Object::toString).orElse(null));
-
-        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, payload);
-    }
-
-    // 1) GET view URL (204 if none)
+    // 1) GET view URL
     @GetMapping("/me/profile-image")
     public ResponseEntity<?> getProfileImage(HttpServletRequest req) {
         var url = profileImageStorageService.presignView(currentUserId(req), regionHint(req));
         return url.<ResponseEntity<?>>map(u -> ResponseEntity.ok(Map.of("url", u.toString())))
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
-
-    // 2) POST presign upload
-    @PostMapping("/me/profile-image/presign")
-    public Map<String,Object> presignProfileImage(@RequestBody Map<String,Object> body, HttpServletRequest req) {
-        String mime = (String) body.get("mimeType");
-        long size = ((Number) body.get("size")).longValue();
-        var up = profileImageStorageService.presignUpload(currentUserId(req), mime, size, regionHint(req));
-        return Map.of("url", up.url().toString(), "key", up.key(), "headers", up.headers());
-    }
-
-    // 3) POST confirm
-    @PostMapping("/me/profile-image/confirm")
-    public SaayamResponse<Map<String, String>> confirmProfileImage(@RequestBody Map<String, String> body,
-                                                                   HttpServletRequest req) {
-        String key  = body.get("key");
-        String etag = body.getOrDefault("etag", "");
-        profileImageStorageService.confirmUpload(currentUserId(req), key, etag, regionHint(req));
-
-        Map<String, String> payload = Map.of(
-                "message", "Profile image saved",
-                "key", key
-        );
-        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, payload);
-    }
-
-    // 4) DELETE image
-    @DeleteMapping("/me/profile-image")
-    public SaayamResponse<Map<String, String>> deleteProfileImage(HttpServletRequest req) {
-        profileImageStorageService.delete(currentUserId(req), regionHint(req));
-        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, Map.of("message", "Profile image deleted"));
-    }
-
-    // new API - Upload
+    // 2) Upload (multipart)
     @PostMapping(value = "/me/profile-image",
             consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
     public SaayamResponse<Map<String, Object>> uploadProfileImage(
@@ -201,5 +133,10 @@ public class UserController {
                 currentUserId(req), file, regionHint(req));
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, payload);
     }
-
+    // 3) DELETE image
+    @DeleteMapping("/me/profile-image")
+    public SaayamResponse<Map<String, String>> deleteProfileImage(HttpServletRequest req) {
+        profileImageStorageService.delete(currentUserId(req), regionHint(req));
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, Map.of("message", "Profile image deleted"));
+    }
 }

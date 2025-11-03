@@ -15,25 +15,6 @@ public class S3Config {
     private final Environment env;
 
     // AWS
-    @Bean
-    @Primary
-    public S3Client s3Client() {
-        return S3Client.builder()
-                .region(Region.US_EAST_1)
-                .serviceConfiguration(S3Configuration.builder()
-                        .pathStyleAccessEnabled(false)
-                        .build())
-                .build();
-    }
-
-    @Bean(name = "s3Presigner")
-    @Primary
-    public S3Presigner s3Presigner() {
-        return S3Presigner.builder()
-                .region(Region.US_EAST_1)
-                .build();
-    }
-
     @Bean("s3ClientUs")
     public S3Client s3ClientUs() {
         return S3Client.builder()

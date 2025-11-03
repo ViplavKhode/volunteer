@@ -15,9 +15,6 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import jakarta.annotation.PostConstruct;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @Service
 public class ProfileImageStorageService {
@@ -68,36 +65,6 @@ public class ProfileImageStorageService {
     // Local memory cache
     private final Map<String, String> keyByUser = new ConcurrentHashMap<>();
     private final Map<String, String> etagByUser = new ConcurrentHashMap<>();
-//    private static final Logger log = LoggerFactory.getLogger(ProfileImageStorageService.class);
-//    @PostConstruct
-//    void logS3Config() {
-//        log.info("S3 config -> euBucket='{}', usBucket='{}', keyPattern='{}', maxBytes={}",
-//                euBucket, usBucket, keyPattern, maxBytes);
-//    }
-
-    // Public API //
-    /** Presign a PUT for the caller’s region; validates MIME + size. */
-    public PresignedUpload presignUpload(String userId, String mimeType, long sizeBytes, String regionHint) {
-        validate(mimeType, sizeBytes);
-        String bucket = pickBucket(regionHint);
-        String key    = buildKey(userId, mimeType); // users/{id}/profile.jpg
-
-        var putReq = PutObjectRequest.builder()
-                .bucket(bucket)
-                .key(key)
-                .contentType(mimeType)
-                .build();
-
-        var presigned = pickPresigner(regionHint).presignPutObject(p -> p
-                .signatureDuration(Duration.ofSeconds(putTtlSeconds))
-                .putObjectRequest(putReq));
-
-        return new PresignedUpload(
-                URI.create(presigned.url().toString()),
-                key,
-                Map.of("Content-Type", mimeType)
-        );
-    }
 
     /** Presign a GET; if cache is empty, reads canonical S3 URI from DB. */
     public Optional<URI> presignView(String userId, String regionHint) {
@@ -139,17 +106,6 @@ public class ProfileImageStorageService {
         return Optional.of(URI.create(presigned.url().toString()));
     }
 
-    /** Confirm upload → cache + persist canonical S3 URI (s3://bucket/key). */
-    public void confirmUpload(String userId, String key, String etag, String regionHint) {
-        keyByUser.put(userId, key);
-        etagByUser.put(userId, etag == null ? "" : etag);
-
-        // persist stable S3 URI like s3://<bucket>/users/<id>/profile.jpg
-        String bucket = pickBucket(regionHint);
-        String s3Uri  = "s3://" + bucket + "/" + key;
-        userService.setProfilePicturePath(userId, s3Uri);
-    }
-
     /** Delete object + clear cache + clear DB field. */
     public void delete(String userId, String regionHint) {
         String key = keyByUser.get(userId);
@@ -184,14 +140,20 @@ public class ProfileImageStorageService {
 
     //
     private void validate(String mime, long size) {
+        String m = Optional.ofNullable(mime).orElse("").trim();
+        int semi = m.indexOf(';');
+        if (semi > -1) m = m.substring(0, semi).trim();
+
         var allowed = Arrays.asList(allowedMimeCsv.split(","));
-        if (!allowed.contains(mime)) {
+        if (!allowed.contains(m)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Unsupported image type. Allowed: " + String.join(", ", allowed) + ".");
         }
+        if (size <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Empty file.");
+        }
         if (size > maxBytes) {
-            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,
-                    "Max upload size is 5 MB.");
+            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Max upload size is 5 MB.");
         }
     }
 
@@ -199,17 +161,12 @@ public class ProfileImageStorageService {
         return String.format(keyPattern, userId);
     }
 
-    // DTO
-    public record PresignedUpload(URI url, String key, Map<String,String> headers) {}
-
     // AWS
     // helper
     private boolean isEu(String regionHint) {
         return regionHint != null && regionHint.trim().equalsIgnoreCase("eu-west-1");
     }
-//    private String pickBucket(String regionHint) {
-//        return isEu(regionHint) ? euBucket : usBucket;
-//    }
+
     private String pickBucket(String regionHint) {
         String bucket = isEu(regionHint) ? euBucket : usBucket;
         if (bucket == null || bucket.isBlank()) {
@@ -224,47 +181,6 @@ public class ProfileImageStorageService {
     private S3Client pickClient(String regionHint) {
         return isEu(regionHint) ? s3ClientEu : s3ClientUs;
     }
-
-    // new API
-//    public record UploadResult(String s3Uri, URI viewUrl) {}
-
-//    public UploadResult uploadAndPersist(String userId, MultipartFile file, String regionHint) {
-//        // 1) Validate
-//        String mime = Optional.ofNullable(file.getContentType()).orElse("");
-//        long size  = file.getSize();
-//        validate(mime, size); // you already have validate(...)
-//
-//        // 2) Build target (bucket/key) and upload via AWS SDK
-//        String bucket = pickBucket(regionHint);
-//        String key    = buildKey(userId, mime); // users/{id}/profile.jpg
-//
-//        var put = PutObjectRequest.builder()
-//                .bucket(bucket)
-//                .key(key)
-//                .contentType(mime)
-//                .serverSideEncryption("AES256")
-//                .build();
-//
-//        try {
-//            pickClient(regionHint).putObject(put, software.amazon.awssdk.core.sync.RequestBody.fromBytes(file.getBytes()));
-//        } catch (IOException e) {
-//            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid file bytes");
-//        }
-//
-//        // 3) Persist canonical S3 URI to RDS
-//        String s3Uri = "s3://" + bucket + "/" + key;
-//        userService.setProfilePicturePath(userId, s3Uri);
-//
-//        // 4) Return a fresh presigned VIEW URL for instant use in FE
-//        var viewUrl = presignView(userId, regionHint).orElseThrow(
-//                () -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to presign view"));
-//
-//        // Update in-memory caches so GET works immediately
-//        keyByUser.put(userId, key);
-//        etagByUser.put(userId, "");
-//
-//        return new UploadResult(s3Uri, viewUrl);
-//    }
 
     public Map<String, Object> uploadMultipart(String userId,
                                                org.springframework.web.multipart.MultipartFile file,
@@ -283,6 +199,7 @@ public class ProfileImageStorageService {
                         .bucket(bucket)
                         .key(key)
                         .contentType(file.getContentType())
+                        .serverSideEncryption("AES256")
                         .build();
 
         s3.putObject(putReq, software.amazon.awssdk.core.sync.RequestBody.fromBytes(file.getBytes()));
