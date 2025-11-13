@@ -1,20 +1,15 @@
 package org.sfa.volunteer.service.impl;
+
 import jakarta.transaction.Transactional;
 import org.sfa.volunteer.dto.request.CreateUserRequest;
+import org.sfa.volunteer.dto.request.UpdateOrganizationRequest;
 import org.sfa.volunteer.dto.request.UpdateUserProfileRequest;
-import org.sfa.volunteer.dto.response.CreateUserResponse;
-import org.sfa.volunteer.dto.response.PaginationResponse;
-import org.sfa.volunteer.dto.response.UserProfileResponse;
+import org.sfa.volunteer.dto.response.*;
 import org.sfa.volunteer.exception.UserCategoryNotFoundException;
 import org.sfa.volunteer.exception.UserNotFoundException;
-import org.sfa.volunteer.model.User;
-import org.sfa.volunteer.model.UserCategory;
-import org.sfa.volunteer.model.UserStatus;
-import org.sfa.volunteer.repository.CountryRepository;
-import org.sfa.volunteer.repository.StateRepository;
-import org.sfa.volunteer.repository.UserCategoryRepository;
-import org.sfa.volunteer.repository.UserRepository;
-import org.sfa.volunteer.repository.UserStatusRepository;
+import org.sfa.volunteer.exception.UserOrganizationNotFoundException;
+import org.sfa.volunteer.model.*;
+import org.sfa.volunteer.repository.*;
 import org.sfa.volunteer.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -25,13 +20,16 @@ import org.springframework.stereotype.Service;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.Optional;
 
 @Service
 @Transactional
 public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final UserStatusRepository userStatusRepository;
+    private final OrganizationRepository organizationRepository;
 
     private final UserCategoryRepository userCategoryRepository;
     private final CountryRepository countryRepository;
@@ -46,10 +44,11 @@ public class UserServiceImpl implements UserService {
     private static final Integer VOLUNTEER_CATEGORY_ID = 2; // User Category: volunteer
 
     @Autowired
-    public UserServiceImpl(UserRepository userRepository, UserStatusRepository userStatusRepository, UserCategoryRepository userCategoryRepository,
+    public UserServiceImpl(UserRepository userRepository, UserStatusRepository userStatusRepository, OrganizationRepository organizationRepository, UserCategoryRepository userCategoryRepository,
                            CountryRepository countryRepository, StateRepository stateRepository) {
         this.userRepository = userRepository;
         this.userStatusRepository = userStatusRepository;
+        this.organizationRepository = organizationRepository;
         this.userCategoryRepository = userCategoryRepository;
         this.countryRepository = countryRepository;
         this.stateRepository = stateRepository;
@@ -64,6 +63,9 @@ public class UserServiceImpl implements UserService {
         UserCategory userCategory = userCategoryRepository.findById(DEFAULT_USER_CATEGORY_ID)
                 .orElseThrow(() -> new UserCategoryNotFoundException(DEFAULT_USER_CATEGORY_ID));
 
+        Country country = countryRepository.findByCountryName(request.country())
+                .orElseThrow(() -> new UserCategoryNotFoundException(DEFAULT_USER_CATEGORY_ID));
+
         // Create a new User entity from the request data
         User user = User.builder()
                 .fullName(request.name())
@@ -73,6 +75,7 @@ public class UserServiceImpl implements UserService {
                 .lastUpdateDate(ZonedDateTime.now(ZoneId.of("UTC")))
                 .userCategory(userCategory)
                 .userStatus(userStatus)
+                .country(country)
                 .build();
 
         // Save the User entity to the database
@@ -85,6 +88,7 @@ public class UserServiceImpl implements UserService {
                 .phoneNumber(user.getPrimaryEmailAddress())
                 .timeZone(user.getTimeZone())
                 .userId(user.getId())
+                .countryName(user.getCountry() != null ? user.getCountry().getCountryName() : null)
                 .build();
     }
 
@@ -142,6 +146,36 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public WizardStatusResponse getWizardStatus(String userId) {
+    UserProfileResponse userProfile = getUserProfileById(userId);
+
+    String addressAvailable = (userProfile.addressLine1() != null && !userProfile.addressLine1().trim().isEmpty())
+            ? "Y" : "N";
+
+    return new WizardStatusResponse(
+        userId,
+        userProfile.promotionWizardStage(),
+        addressAvailable
+    );
+}
+    
+    @Override
+    public AddressStatusResponse getAddressStatus(String userId) {
+    UserProfileResponse userProfile = getUserProfileById(userId);
+
+    String addressAvailable = (userProfile.addressLine1() != null && !userProfile.addressLine1().trim().isEmpty())
+            ? "Y" : "N";
+
+    return new AddressStatusResponse(
+        userId,
+        addressAvailable
+    );
+}
+
+
+
+
+    @Override
     public UserProfileResponse getUserProfileByEmail(String email) {
         List<User> user = userRepository.findByPrimaryEmailAddress(email);
 
@@ -182,4 +216,85 @@ public class UserServiceImpl implements UserService {
                 .promotionWizardLastUpdateDate(user.getVolunteerUpdateDate())
                 .build();
     }
+
+    @Override
+    public OrganizationResponse updateUserOrganization(String userId, UpdateOrganizationRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+
+        Organization organization = organizationRepository.findByUser(user).orElse(null);
+
+        if (organization == null) {
+            organization = new Organization();
+            organization.setUser(user);
+        }
+
+        if (request.organizationName() != null) organization.setOrganizationName(request.organizationName());
+        if (request.organizationType() != null) organization.setOrganizationType(request.organizationType());
+        if (request.phoneNumber() != null) organization.setPhoneNumber(request.phoneNumber());
+        if (request.email() != null) organization.setEmail(request.email());
+        if (request.url() != null) organization.setUrl(request.url());
+        if (request.streetAddress1() != null) organization.setStreetAddress1(request.streetAddress1());
+        if (request.streetAddress2() != null) organization.setStreetAddress2(request.streetAddress2());
+        if (request.city() != null) organization.setCity(request.city());
+        if (request.state() != null) organization.setState(request.state());
+        if (request.zipCode() != null) organization.setZipCode(request.zipCode());
+
+        organization.setLastUpdateDate(ZonedDateTime.now(ZoneId.of("UTC")));
+        Organization updatedOrganization = organizationRepository.save(organization);
+
+        return OrganizationResponse.builder()
+                .id(updatedOrganization.getId())
+                .organizationName(updatedOrganization.getOrganizationName())
+                .organizationType(updatedOrganization.getOrganizationType())
+                .phoneNumber(updatedOrganization.getPhoneNumber())
+                .email(updatedOrganization.getEmail())
+                .url(updatedOrganization.getUrl())
+                .streetAddress1(updatedOrganization.getStreetAddress1())
+                .streetAddress2(updatedOrganization.getStreetAddress2())
+                .city(updatedOrganization.getCity())
+                .state(updatedOrganization.getState())
+                .zipCode(updatedOrganization.getZipCode())
+                .build();
+    }
+
+    @Override
+    public OrganizationResponse getOrganizationByUserId(String userId) {
+        Organization organization = organizationRepository.findByUserId(userId)
+                .orElseThrow(() -> new UserOrganizationNotFoundException(userId));
+
+        return OrganizationResponse.builder()
+                .id(organization.getId())
+                .organizationName(organization.getOrganizationName())
+                .organizationName(organization.getOrganizationName())
+                .organizationType(organization.getOrganizationType())
+                .phoneNumber(organization.getPhoneNumber())
+                .email(organization.getEmail())
+                .url(organization.getUrl())
+                .streetAddress1(organization.getStreetAddress1())
+                .streetAddress2(organization.getStreetAddress2())
+                .city(organization.getCity())
+                .state(organization.getState())
+                .zipCode(organization.getZipCode())
+                .build();
+    }
+    // Profile Pic Upload
+    // S3 URI <-> DB //
+    @Override
+    public void setProfilePicturePath(String userId, String s3Uri) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+        user.setProfilePicturePath(s3Uri);  // store S3 URI here
+        user.setLastUpdateDate(ZonedDateTime.now(ZoneId.of("UTC")));
+        userRepository.save(user);
+    }
+
+    @Override
+    public Optional<String> getProfilePicturePath(String userId) {
+        return userRepository.findById(userId)
+                .map(User::getProfilePicturePath)
+                .filter(Objects::nonNull)
+                .filter(s -> !s.isBlank());
+    }
+
 }

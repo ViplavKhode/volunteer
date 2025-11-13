@@ -1,24 +1,22 @@
 package org.sfa.volunteer.controller;
-import com.amazonaws.services.lambda.runtime.events.S3ObjectLambdaEvent;
+
 import jakarta.validation.Valid;
 import org.sfa.volunteer.dto.common.SaayamResponse;
 import org.sfa.volunteer.dto.common.SaayamStatusCode;
 import org.sfa.volunteer.dto.request.CreateUserRequest;
+import org.sfa.volunteer.dto.request.UpdateOrganizationRequest;
 import org.sfa.volunteer.dto.request.UpdateUserProfileRequest;
-import org.sfa.volunteer.dto.response.CreateUserResponse;
-import org.sfa.volunteer.dto.response.PaginationResponse;
-import org.sfa.volunteer.dto.response.UserProfileResponse;
+import org.sfa.volunteer.dto.response.*;
+import org.sfa.volunteer.service.ProfileImageStorageService;
 import org.sfa.volunteer.service.UserService;
 import org.sfa.volunteer.util.ResponseBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/0.0.1/users")
@@ -27,10 +25,16 @@ public class UserController {
     private final UserService userService;
     private final ResponseBuilder responseBuilder;
 
+    private final ProfileImageStorageService profileImageStorageService;
+    private static final String HDR_DEV_UID = "X-Dev-UserId";
+    private static final String HDR_REGION  = "X-Dev-Region";
+
+
     @Autowired
-    public UserController(UserService userService, ResponseBuilder responseBuilder) {
+    public UserController(UserService userService, ResponseBuilder responseBuilder, ProfileImageStorageService profileImageStorageService) {
         this.userService = userService;
         this.responseBuilder = responseBuilder;
+        this.profileImageStorageService = profileImageStorageService;
     }
 
     @PostMapping
@@ -60,6 +64,18 @@ public class UserController {
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userId}, response);
     }
 
+    @GetMapping("/wizard/{userId}")
+    public SaayamResponse<WizardStatusResponse> getWizardStatus(@PathVariable String userId) {
+        WizardStatusResponse response = userService.getWizardStatus(userId);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userId}, response);
+    }
+    
+    @GetMapping("/addressStatus/{userId}")
+    public SaayamResponse<AddressStatusResponse> getAddressStatus(@PathVariable String userId) {
+    	AddressStatusResponse response = userService.getAddressStatus(userId);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userId}, response);
+    } 
+
     @GetMapping("/login/{email}")
     public SaayamResponse<UserProfileResponse> getUserProfileAfterLogin(@PathVariable String email) {
         UserProfileResponse response = userService.getUserProfileByEmail(email);
@@ -72,5 +88,55 @@ public class UserController {
             @RequestBody UpdateUserProfileRequest request) {
         UserProfileResponse response = userService.updateUserProfile(userId, request);
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.USER_ACCOUNT_UPDATED, new Object[]{userId}, response);
+    }
+
+    @PutMapping("/organization/{userId}")
+    public SaayamResponse<OrganizationResponse> updateUserOrganization(
+            @PathVariable String userId,
+            @RequestBody UpdateOrganizationRequest request) {
+        OrganizationResponse response = userService.updateUserOrganization(userId, request);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userId}, response);
+    }
+
+    @GetMapping("/organization/{userId}")
+    public SaayamResponse<OrganizationResponse> getOrganizationByUserId(@PathVariable String userId) {
+        OrganizationResponse organization = userService.getOrganizationByUserId(userId);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userId}, organization);
+    }
+    /* Profile Pic Upload */
+    // Helper
+    private String currentUserId(HttpServletRequest req) {
+        // Login Payload
+        String override = req.getHeader(HDR_DEV_UID);
+        if (override != null && !override.isBlank()) return override;
+        return "11111111-1111-1111-1111-111111111111";
+    }
+    private String regionHint(HttpServletRequest req) {
+        String r = req.getHeader(HDR_REGION);
+        return (r == null || r.isBlank()) ? "us-east-1" : r;
+    }
+
+    // 1) GET view URL
+    @GetMapping("/me/profile-image")
+    public ResponseEntity<?> getProfileImage(HttpServletRequest req) {
+        var url = profileImageStorageService.presignView(currentUserId(req), regionHint(req));
+        return url.<ResponseEntity<?>>map(u -> ResponseEntity.ok(Map.of("url", u.toString())))
+                .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+    // 2) Upload (multipart)
+    @PostMapping(value = "/me/profile-image",
+            consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public SaayamResponse<Map<String, Object>> uploadProfileImage(
+            @RequestPart("file") org.springframework.web.multipart.MultipartFile file,
+            jakarta.servlet.http.HttpServletRequest req) throws java.io.IOException {
+        var payload = profileImageStorageService.uploadMultipart(
+                currentUserId(req), file, regionHint(req));
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, payload);
+    }
+    // 3) DELETE image
+    @DeleteMapping("/me/profile-image")
+    public SaayamResponse<Map<String, String>> deleteProfileImage(HttpServletRequest req) {
+        profileImageStorageService.delete(currentUserId(req), regionHint(req));
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, Map.of("message", "Profile image deleted"));
     }
 }
