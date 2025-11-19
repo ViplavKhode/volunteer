@@ -44,7 +44,6 @@ import java.util.stream.Collectors;
 @Service
 @Transactional
 public class UserServiceImpl implements UserService {
-
     private final UserRepository userRepository;
     private final UserStatusRepository userStatusRepository;
     private final OrganizationRepository organizationRepository;
@@ -56,9 +55,10 @@ public class UserServiceImpl implements UserService {
     private static final int DEFAULT_PAGE = 0;
     private static final int DEFAULT_SIZE = 10;
 
-    private static final Integer DEFAULT_USER_STATUS_ID = 1;
-    private static final Integer DEFAULT_USER_CATEGORY_ID = 1;
-    private static final Integer VOLUNTEER_CATEGORY_ID = 2;
+    // Default IDs for user status and category
+    private static final Integer DEFAULT_USER_STATUS_ID = 1; // Active user
+    private static final Integer DEFAULT_USER_CATEGORY_ID = 1; // User Category: common user
+    private static final Integer VOLUNTEER_CATEGORY_ID = 2; // User Category: volunteer
 
     @Autowired
     public UserServiceImpl(
@@ -91,6 +91,7 @@ public class UserServiceImpl implements UserService {
         Country country = countryRepository.findByCountryName(request.country())
                 .orElseThrow(() -> new UserCategoryNotFoundException(DEFAULT_USER_CATEGORY_ID));
 
+        // Create a new User entity from the request data
         User user = User.builder()
                 .fullName(request.name())
                 .primaryEmailAddress(request.email())
@@ -102,8 +103,10 @@ public class UserServiceImpl implements UserService {
                 .country(country)
                 .build();
 
+        // Save the User entity to the database
         user = userRepository.save(user);
 
+        // Create a response object from the saved User entity
         return CreateUserResponse.builder()
                 .name(user.getFullName())
                 .email(user.getPrimaryEmailAddress())
@@ -119,6 +122,7 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
+        // Update all fields from the request without null checks
         user.setFirstName(request.firstName());
         user.setMiddleName(request.middleName());
         user.setLastName(request.lastName());
@@ -168,30 +172,33 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public WizardStatusResponse getWizardStatus(String userId) {
-        UserProfileResponse userProfile = getUserProfileById(userId);
+    UserProfileResponse userProfile = getUserProfileById(userId);
 
-        String addressAvailable = (userProfile.addressLine1() != null && !userProfile.addressLine1().trim().isEmpty())
-                ? "Y" : "N";
+    String addressAvailable = (userProfile.addressLine1() != null && !userProfile.addressLine1().trim().isEmpty())
+            ? "Y" : "N";
 
-        return new WizardStatusResponse(
-                userId,
-                userProfile.promotionWizardStage(),
-                addressAvailable
-        );
-    }
-
+    return new WizardStatusResponse(
+        userId,
+        userProfile.promotionWizardStage(),
+        addressAvailable
+    );
+}
+    
     @Override
     public AddressStatusResponse getAddressStatus(String userId) {
-        UserProfileResponse userProfile = getUserProfileById(userId);
+    UserProfileResponse userProfile = getUserProfileById(userId);
 
-        String addressAvailable = (userProfile.addressLine1() != null && !userProfile.addressLine1().trim().isEmpty())
-                ? "Y" : "N";
+    String addressAvailable = (userProfile.addressLine1() != null && !userProfile.addressLine1().trim().isEmpty())
+            ? "Y" : "N";
 
-        return new AddressStatusResponse(
-                userId,
-                addressAvailable
-        );
-    }
+    return new AddressStatusResponse(
+        userId,
+        addressAvailable
+    );
+}
+
+
+
 
     @Override
     public UserProfileResponse getUserProfileByEmail(String email) {
@@ -295,6 +302,16 @@ public class UserServiceImpl implements UserService {
                 .zipCode(organization.getZipCode())
                 .build();
     }
+    // Profile Pic Upload
+    // S3 URI <-> DB //
+    @Override
+    public void setProfilePicturePath(String userId, String s3Uri) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+        user.setProfilePicturePath(s3Uri);  // store S3 URI here
+        user.setLastUpdateDate(ZonedDateTime.now(ZoneId.of("UTC")));
+        userRepository.save(user);
+    }
 
     @Transactional
     @Override
@@ -305,6 +322,13 @@ public class UserServiceImpl implements UserService {
         if (reason != null && !reason.isEmpty()) {
             userSignOffReasonRepository.save(new UserSignOffReason(reason));
         }
+    @Override
+    public Optional<String> getProfilePicturePath(String userId) {
+        return userRepository.findById(userId)
+                .map(User::getProfilePicturePath)
+                .filter(Objects::nonNull)
+                .filter(s -> !s.isBlank());
+    }
 
         user.setUserCategory(null);
         user.setUserStatus(null);
