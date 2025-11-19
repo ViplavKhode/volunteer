@@ -31,4 +31,5 @@ public interface UserService {
     // AWS (S3 URI <-> DB)
     void setProfilePicturePath(String userId, String s3Uri);
     java.util.Optional<String> getProfilePicturePath(String userId);
+    boolean userExists(String userId);
 }

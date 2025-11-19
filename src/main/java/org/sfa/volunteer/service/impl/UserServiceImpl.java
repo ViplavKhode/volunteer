@@ -296,5 +296,9 @@ public class UserServiceImpl implements UserService {
                 .filter(Objects::nonNull)
                 .filter(s -> !s.isBlank());
     }
+    @Override
+    public boolean userExists(String userId) {
+        return userRepository.existsById(userId);
+    }
 
 }

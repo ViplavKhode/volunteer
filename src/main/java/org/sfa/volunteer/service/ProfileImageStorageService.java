@@ -185,11 +185,15 @@ public class ProfileImageStorageService {
     public Map<String, Object> uploadMultipart(String userId,
                                                org.springframework.web.multipart.MultipartFile file,
                                                String regionHint) throws java.io.IOException {
+        // 0) Ensure user exists before touching S3
+        if (!userService.userExists(userId)) {
+            throw new org.sfa.volunteer.exception.UserNotFoundException(userId);
+        }
         // 1) Validate content-type + size
         validate(file.getContentType(), file.getSize());
 
         // 2) Determine bucket/key/client
-        String bucket = pickBucket(regionHint);           // <-- throws if blank
+        String bucket = pickBucket(regionHint);
         String key    = buildKey(userId, file.getContentType());
         S3Client s3   = pickClient(regionHint);
 
@@ -204,7 +208,7 @@ public class ProfileImageStorageService {
 
         s3.putObject(putReq, software.amazon.awssdk.core.sync.RequestBody.fromBytes(file.getBytes()));
 
-        // 4) Save canonical S3 URI to DB + cache key (so presignView can reuse)
+        // 4) Save canonical S3 URI to DB + cache key
         String s3Uri = "s3://" + bucket + "/" + key;
         userService.setProfilePicturePath(userId, s3Uri);
         keyByUser.put(userId, key);
