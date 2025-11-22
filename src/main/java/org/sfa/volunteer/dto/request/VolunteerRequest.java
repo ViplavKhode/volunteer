@@ -1,4 +1,5 @@
 package org.sfa.volunteer.dto.request;
+
 import jakarta.validation.constraints.NotBlank;
 import lombok.Builder;
 import java.time.ZonedDateTime;
@@ -12,7 +13,7 @@ public record VolunteerRequest(
         ZonedDateTime tcUpdateDate,
         String govtIdFilename,
         ZonedDateTime govtUpdateDate,
-        String skills,
+        List<String> skills,
         Boolean notification,
         Boolean isCompleted,
         ZonedDateTime completedDate,
