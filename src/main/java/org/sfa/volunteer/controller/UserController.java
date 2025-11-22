@@ -127,8 +127,8 @@ public class UserController {
     @DeleteMapping("/profile/signoff/{userId}")
     public SaayamResponse<SignOffResponse> signOffUser(
             @PathVariable String userId,
-            @RequestBody SignOffRequest request) {
-
+            @RequestBody(required = false) SignOffRequest request) {
+        profileImageStorageService.delete(userId, "us-east-1");
         SignOffResponse response = userService.signOffUser(userId, request.reason());
 
         return responseBuilder.buildSuccessResponse(

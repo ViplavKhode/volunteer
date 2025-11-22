@@ -28,6 +28,7 @@ import org.sfa.volunteer.repository.UserCategoryRepository;
 import org.sfa.volunteer.repository.UserRepository;
 import org.sfa.volunteer.repository.UserSignOffReasonRepository;
 import org.sfa.volunteer.repository.UserStatusRepository;
+import org.sfa.volunteer.service.ProfileImageStorageService;
 import org.sfa.volunteer.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -39,6 +40,8 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -319,28 +322,27 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
-        if (reason != null && !reason.isEmpty()) {
+        // Save sign-off reason if provided
+        if (reason != null && !reason.isBlank()) {
             userSignOffReasonRepository.save(new UserSignOffReason(reason));
         }
+
+        // Delete user
+        userRepository.delete(user);
+
+        //  Return response
+        return new SignOffResponse(
+                userId,
+                "deleted",
+                Instant.now()
+        );
+
+    }
     @Override
     public Optional<String> getProfilePicturePath(String userId) {
         return userRepository.findById(userId)
                 .map(User::getProfilePicturePath)
                 .filter(Objects::nonNull)
                 .filter(s -> !s.isBlank());
-    }
-
-        user.setUserCategory(null);
-        user.setUserStatus(null);
-        user.setCountry(null);
-        user.setState(null);
-
-        userRepository.delete(user);
-
-        return new SignOffResponse(
-                userId,
-                "deleted",
-                Instant.now()
-        );
     }
 }
