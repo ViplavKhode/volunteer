@@ -106,40 +106,65 @@ public class ProfileImageStorageService {
         return Optional.of(URI.create(presigned.url().toString()));
     }
 
-    /** Delete object + clear cache + clear DB field. */
+    /** Delete object from S3 + clear DB + clear cache. */
     public void delete(String userId, String regionHint) {
+        // Ensure user exists
         if (!userService.userExists(userId)) {
+            throw new org.sfa.volunteer.exception.UserNotFoundException(userId);
+        }
+
+        // Read current S3 URI from DB
+        var uriOpt = userService.getProfilePicturePath(userId);
+        if (uriOpt.isEmpty()) {
+            // No profile picture stored → nothing to delete
+            keyByUser.remove(userId);
             return;
         }
-        String key = keyByUser.get(userId);
-        String bucket = pickBucket(regionHint);
 
-        if (key == null) {
-            // fall back to DB
-            var uriOpt = userService.getProfilePicturePath(userId);
-            if (uriOpt.isPresent()) {
-                var uri = URI.create(uriOpt.get());
-                String ssp = uri.getSchemeSpecificPart();
+        var uri = java.net.URI.create(uriOpt.get());
+        String ssp = uri.getSchemeSpecificPart();
+        if (ssp.startsWith("//")) {
+            ssp = ssp.substring(2);
+        }
 
-                if (ssp.startsWith("//")) {
-                    ssp = ssp.substring(2);
-                }
-                int slash = ssp.indexOf('/');
-                if (slash > 0) {
-                    String dbBucket = ssp.substring(0, slash);
-                    key = ssp.substring(slash + 1);
-                    bucket = dbBucket;
-                }
+        int slash = ssp.indexOf('/');
+        if (slash <= 0) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Invalid profile picture URI for user " + userId
+            );
+        }
+
+        String bucket = ssp.substring(0, slash);
+        String key    = ssp.substring(slash + 1);
+
+        // Resolve effective region
+        String effectiveRegion = regionHint;
+        if (effectiveRegion == null || effectiveRegion.isBlank()) {
+            if (bucket.equals(euBucket)) {
+                effectiveRegion = "eu-west-1";
+            } else {
+                effectiveRegion = "us-east-1";
             }
         }
 
-        if (key != null) {
-            pickClient(regionHint).deleteObject(DeleteObjectRequest.builder()
-                    .bucket(bucket)
-                    .key(key)
-                    .build());
+        // Delete from S3
+        try {
+            pickClient(effectiveRegion).deleteObject(
+                    DeleteObjectRequest.builder()
+                            .bucket(bucket)
+                            .key(key)
+                            .build()
+            );
+        } catch (software.amazon.awssdk.services.s3.model.S3Exception e) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Failed to delete profile image from S3",
+                    e
+            );
         }
 
+        // Only after S3 delete ok → clear DB + cache
         keyByUser.remove(userId);
         userService.setProfilePicturePath(userId, null);
     }
