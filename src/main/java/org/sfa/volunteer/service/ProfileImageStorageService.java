@@ -8,7 +8,6 @@ import org.springframework.web.server.ResponseStatusException;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import java.net.URI;
@@ -20,8 +19,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ProfileImageStorageService {
 
     private final UserService userService;
-
-    // Region-specific clients/presigners //
     private final S3Client s3ClientUs;
     private final S3Client s3ClientEu;
     private final S3Presigner s3PresignerUs;
@@ -50,9 +47,6 @@ public class ProfileImageStorageService {
     @Value("${saayam.s3.presign.getTtlSeconds:300}")
     private int getTtlSeconds;
 
-    @Value("${saayam.s3.presign.putTtlSeconds:300}")
-    private int putTtlSeconds;
-
     @Value("${saayam.s3.maxBytes:2097152}")
     private long maxBytes;
 
@@ -64,10 +58,12 @@ public class ProfileImageStorageService {
 
     // Local memory cache
     private final Map<String, String> keyByUser = new ConcurrentHashMap<>();
-    private final Map<String, String> etagByUser = new ConcurrentHashMap<>();
 
-    /** Presign a GET; if cache is empty, reads canonical S3 URI from DB. */
+    /** Presign a GET; Returns a presigned GET URL if the user has an image; otherwise empty. */
     public Optional<URI> presignView(String userId, String regionHint) {
+        if (!userService.userExists(userId)) {
+            return Optional.empty();
+        }
         String key = keyByUser.get(userId);
         String bucket = null;
 
@@ -78,6 +74,9 @@ public class ProfileImageStorageService {
 
             var uri = URI.create(uriOpt.get());
             String ssp = uri.getSchemeSpecificPart();
+            if (ssp.startsWith("//")) {
+                ssp = ssp.substring(2);
+            }
             int slash = ssp.indexOf('/');
             if (slash < 0) return Optional.empty();
             bucket = ssp.substring(0, slash);
@@ -88,6 +87,7 @@ public class ProfileImageStorageService {
                 else if (bucket.equals(usBucket))  regionHint = "us-east-1";
                 else                               regionHint = "us-east-1"; // safe default
             }
+            keyByUser.put(userId, key);
         }
 
         if (bucket == null) {
@@ -106,93 +106,81 @@ public class ProfileImageStorageService {
         return Optional.of(URI.create(presigned.url().toString()));
     }
 
-    /** Delete object + clear cache + clear DB field. */
+    /** Delete object from S3 + clear DB + clear cache. */
     public void delete(String userId, String regionHint) {
-        String key = keyByUser.get(userId);
-        String bucket = pickBucket(regionHint);
-        // Fallback to DB if key is not in memory
-        if (key == null) {
-            var uriOpt = userService.getProfilePicturePath(userId);
-            if (uriOpt.isPresent()) {
-                var uri = URI.create(uriOpt.get());
-                String ssp = uri.getSchemeSpecificPart();
-                // Remove leading "//" if present
-                if (ssp.startsWith("//")) {
-                    ssp = ssp.substring(2);
-                }
-                int slash = ssp.indexOf('/');
-                if (slash > 0) {
-                    String dbBucket = ssp.substring(0, slash);
-                    key = ssp.substring(slash + 1);
-                    bucket = dbBucket; // override bucket to real bucket
-                }
+        // Ensure user exists
+        if (!userService.userExists(userId)) {
+            throw new org.sfa.volunteer.exception.UserNotFoundException(userId);
+        }
+
+        // Read current S3 URI from DB
+        var uriOpt = userService.getProfilePicturePath(userId);
+        if (uriOpt.isEmpty()) {
+            // No profile picture stored → nothing to delete
+            keyByUser.remove(userId);
+            return;
+        }
+
+        var uri = java.net.URI.create(uriOpt.get());
+        String ssp = uri.getSchemeSpecificPart();
+        if (ssp.startsWith("//")) {
+            ssp = ssp.substring(2);
+        }
+
+        int slash = ssp.indexOf('/');
+        if (slash <= 0) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Invalid profile picture URI for user " + userId
+            );
+        }
+
+        String bucket = ssp.substring(0, slash);
+        String key    = ssp.substring(slash + 1);
+
+        // Resolve effective region
+        String effectiveRegion = regionHint;
+        if (effectiveRegion == null || effectiveRegion.isBlank()) {
+            if (bucket.equals(euBucket)) {
+                effectiveRegion = "eu-west-1";
+            } else {
+                effectiveRegion = "us-east-1";
             }
         }
-        // Perform delete ONLY if key exists
-        if (key != null) {
-            pickClient(regionHint).deleteObject(
-                        DeleteObjectRequest.builder()
-                                .bucket(bucket)
-                                .key(key)
-                                .build());
+
+        // Delete from S3
+        try {
+            pickClient(effectiveRegion).deleteObject(
+                    DeleteObjectRequest.builder()
+                            .bucket(bucket)
+                            .key(key)
+                            .build()
+            );
+        } catch (software.amazon.awssdk.services.s3.model.S3Exception e) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Failed to delete profile image from S3",
+                    e
+            );
         }
+
+        // Only after S3 delete ok → clear DB + cache
         keyByUser.remove(userId);
-        etagByUser.remove(userId);
         userService.setProfilePicturePath(userId, null);
-
-    }
-    //
-    private void validate(String mime, long size) {
-        String m = Optional.ofNullable(mime).orElse("").trim();
-        int semi = m.indexOf(';');
-        if (semi > -1) m = m.substring(0, semi).trim();
-
-        var allowed = Arrays.asList(allowedMimeCsv.split(","));
-        if (!allowed.contains(m)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Unsupported image type. Allowed: " + String.join(", ", allowed) + ".");
-        }
-        if (size <= 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Empty file.");
-        }
-        if (size > maxBytes) {
-            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Max upload size is 5 MB.");
-        }
-    }
-
-    private String buildKey(String userId, String mime) {
-        return String.format(keyPattern, userId);
-    }
-
-    // AWS
-    // helper
-    private boolean isEu(String regionHint) {
-        return regionHint != null && regionHint.trim().equalsIgnoreCase("eu-west-1");
-    }
-
-    private String pickBucket(String regionHint) {
-        String bucket = isEu(regionHint) ? euBucket : usBucket;
-        if (bucket == null || bucket.isBlank()) {
-            throw new IllegalStateException("S3 bucket config missing. Check saayam.s3.buckets.* in application.properties");
-        }
-        return bucket;
-    }
-
-    private S3Presigner pickPresigner(String regionHint) {
-        return isEu(regionHint) ? s3PresignerEu : s3PresignerUs;
-    }
-    private S3Client pickClient(String regionHint) {
-        return isEu(regionHint) ? s3ClientEu : s3ClientUs;
     }
 
     public Map<String, Object> uploadMultipart(String userId,
                                                org.springframework.web.multipart.MultipartFile file,
                                                String regionHint) throws java.io.IOException {
+        // Ensure user exists before touching S3
+        if (!userService.userExists(userId)) {
+            throw new org.sfa.volunteer.exception.UserNotFoundException(userId);
+        }
         // 1) Validate content-type + size
         validate(file.getContentType(), file.getSize());
 
         // 2) Determine bucket/key/client
-        String bucket = pickBucket(regionHint);           // <-- throws if blank
+        String bucket = pickBucket(regionHint);
         String key    = buildKey(userId, file.getContentType());
         S3Client s3   = pickClient(regionHint);
 
@@ -207,7 +195,7 @@ public class ProfileImageStorageService {
 
         s3.putObject(putReq, software.amazon.awssdk.core.sync.RequestBody.fromBytes(file.getBytes()));
 
-        // 4) Save canonical S3 URI to DB + cache key (so presignView can reuse)
+        // 4) Save canonical S3 URI to DB + cache key
         String s3Uri = "s3://" + bucket + "/" + key;
         userService.setProfilePicturePath(userId, s3Uri);
         keyByUser.put(userId, key);
@@ -234,5 +222,47 @@ public class ProfileImageStorageService {
                 "s3Uri", s3Uri,
                 "viewUrl", viewUrl.toString()
         );
+    }
+
+    // helper
+    private void validate(String mime, long size) {
+        String m = Optional.ofNullable(mime).orElse("").trim();
+        int semi = m.indexOf(';');
+        if (semi > -1) m = m.substring(0, semi).trim();
+
+        var allowed = Arrays.asList(allowedMimeCsv.split(","));
+        if (!allowed.contains(m)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Unsupported image type. Allowed: " + String.join(", ", allowed) + ".");
+        }
+        if (size <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Empty file.");
+        }
+        if (size > maxBytes) {
+            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Max upload size is 5 MB.");
+        }
+    }
+
+    private String buildKey(String userId, String mime) {
+        return String.format(keyPattern, userId);
+    }
+
+    private boolean isEu(String regionHint) {
+        return regionHint != null && regionHint.trim().equalsIgnoreCase("eu-west-1");
+    }
+
+    private String pickBucket(String regionHint) {
+        String bucket = isEu(regionHint) ? euBucket : usBucket;
+        if (bucket == null || bucket.isBlank()) {
+            throw new IllegalStateException("S3 bucket config missing. Check saayam.s3.buckets.* in application.properties");
+        }
+        return bucket;
+    }
+
+    private S3Presigner pickPresigner(String regionHint) {
+        return isEu(regionHint) ? s3PresignerEu : s3PresignerUs;
+    }
+    private S3Client pickClient(String regionHint) {
+        return isEu(regionHint) ? s3ClientEu : s3ClientUs;
     }
 }

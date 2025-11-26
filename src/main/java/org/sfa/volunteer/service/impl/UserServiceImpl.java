@@ -315,6 +315,18 @@ public class UserServiceImpl implements UserService {
         user.setLastUpdateDate(ZonedDateTime.now(ZoneId.of("UTC")));
         userRepository.save(user);
     }
+    @Override
+    public Optional<String> getProfilePicturePath(String userId) {
+        return userRepository.findById(userId)
+                .map(User::getProfilePicturePath)
+                .filter(Objects::nonNull)
+                .filter(s -> !s.isBlank());
+    }
+
+    @Override
+    public boolean userExists(String userId) {
+        return userRepository.existsById(userId);
+    }
 
     @Transactional
     @Override
@@ -336,11 +348,5 @@ public class UserServiceImpl implements UserService {
         );
 
     }
-    @Override
-    public Optional<String> getProfilePicturePath(String userId) {
-        return userRepository.findById(userId)
-                .map(User::getProfilePicturePath)
-                .filter(Objects::nonNull)
-                .filter(s -> !s.isBlank());
-    }
+
 }
