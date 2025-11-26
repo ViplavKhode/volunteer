@@ -110,34 +110,37 @@ public class ProfileImageStorageService {
     public void delete(String userId, String regionHint) {
         String key = keyByUser.get(userId);
         String bucket = pickBucket(regionHint);
-
+        // Fallback to DB if key is not in memory
         if (key == null) {
-            // fall back to DB
             var uriOpt = userService.getProfilePicturePath(userId);
             if (uriOpt.isPresent()) {
                 var uri = URI.create(uriOpt.get());
                 String ssp = uri.getSchemeSpecificPart();
+                // Remove leading "//" if present
+                if (ssp.startsWith("//")) {
+                    ssp = ssp.substring(2);
+                }
                 int slash = ssp.indexOf('/');
                 if (slash > 0) {
                     String dbBucket = ssp.substring(0, slash);
                     key = ssp.substring(slash + 1);
-                    bucket = dbBucket;
+                    bucket = dbBucket; // override bucket to real bucket
                 }
             }
         }
-
+        // Perform delete ONLY if key exists
         if (key != null) {
-            pickClient(regionHint).deleteObject(DeleteObjectRequest.builder()
-                    .bucket(bucket)
-                    .key(key)
-                    .build());
+            pickClient(regionHint).deleteObject(
+                        DeleteObjectRequest.builder()
+                                .bucket(bucket)
+                                .key(key)
+                                .build());
         }
-
         keyByUser.remove(userId);
         etagByUser.remove(userId);
         userService.setProfilePicturePath(userId, null);
-    }
 
+    }
     //
     private void validate(String mime, long size) {
         String m = Optional.ofNullable(mime).orElse("").trim();

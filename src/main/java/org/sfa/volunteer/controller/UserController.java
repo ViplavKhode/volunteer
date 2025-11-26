@@ -20,7 +20,6 @@ import org.sfa.volunteer.service.UserService;
 import org.sfa.volunteer.util.ResponseBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
-
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -32,7 +31,6 @@ public class UserController {
 
     private final UserService userService;
     private final ResponseBuilder responseBuilder;
-
     private final ProfileImageStorageService profileImageStorageService;
     private static final String HDR_DEV_UID = "X-Dev-UserId";
     private static final String HDR_REGION  = "X-Dev-Region";
@@ -124,19 +122,6 @@ public class UserController {
         return (r == null || r.isBlank()) ? "us-east-1" : r;
     }
 
-    @DeleteMapping("/profile/signoff/{userId}")
-    public SaayamResponse<SignOffResponse> signOffUser(
-            @PathVariable String userId,
-            @RequestBody(required = false) SignOffRequest request) {
-        profileImageStorageService.delete(userId, "us-east-1");
-        SignOffResponse response = userService.signOffUser(userId, request.reason());
-
-        return responseBuilder.buildSuccessResponse(
-                SaayamStatusCode.USER_DELETED,
-                new Object[]{userId},
-                response
-        );
-    }
     // 1) GET view URL
     @GetMapping("/me/profile-image")
     public ResponseEntity<?> getProfileImage(HttpServletRequest req) {
@@ -159,5 +144,18 @@ public class UserController {
     public SaayamResponse<Map<String, String>> deleteProfileImage(HttpServletRequest req) {
         profileImageStorageService.delete(currentUserId(req), regionHint(req));
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, Map.of("message", "Profile image deleted"));
+    }
+    @DeleteMapping("/profile/signoff/{userId}")
+    public SaayamResponse<SignOffResponse> signOffUser(
+            @PathVariable String userId,
+            @RequestBody(required = false) SignOffRequest request) {
+        profileImageStorageService.delete(userId, "us-east-1");
+        SignOffResponse response = userService.signOffUser(userId, request.reason());
+
+        return responseBuilder.buildSuccessResponse(
+                SaayamStatusCode.USER_DELETED,
+                new Object[]{userId},
+                response
+        );
     }
 }

@@ -332,9 +332,7 @@ public class UserServiceImpl implements UserService {
 
         //  Return response
         return new SignOffResponse(
-                userId,
-                "deleted",
-                Instant.now()
+                userId
         );
 
     }
