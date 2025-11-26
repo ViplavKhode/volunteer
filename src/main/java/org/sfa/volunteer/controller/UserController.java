@@ -106,7 +106,7 @@ public class UserController {
     /* Profile Pic Upload */
     // Helper
     private String currentUserId(HttpServletRequest req) {
-        // Login Payload
+        // Login Payload (In production this comes from the auth payload - JWT)
         String override = req.getHeader(HDR_DEV_UID);
         if (override != null && !override.isBlank()) return override;
         return "11111111-1111-1111-1111-111111111111";
