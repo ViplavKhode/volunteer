@@ -115,28 +115,42 @@ public class UserController {
         String r = req.getHeader(HDR_REGION);
         return (r == null || r.isBlank()) ? "us-east-1" : r;
     }
+    // Helper: resolve which userId to use
+    private String resolveUserId(HttpServletRequest req, String userIdParam) {
+        if (userIdParam != null && !userIdParam.isBlank()) {
+            return userIdParam;
+        }
+        return currentUserId(req);
+    }
 
     // 1) GET view URL
     @GetMapping("/me/profile-image")
-    public ResponseEntity<?> getProfileImage(HttpServletRequest req) {
-        var url = profileImageStorageService.presignView(currentUserId(req), regionHint(req));
-        return url.<ResponseEntity<?>>map(u -> ResponseEntity.ok(Map.of("url", u.toString())))
-                .orElseGet(() -> ResponseEntity.noContent().build());
+    public ResponseEntity<?> getProfileImage(HttpServletRequest req,
+            @RequestParam(value = "userId", required = false) String userIdParam) {
+        String targetUserId = resolveUserId(req, userIdParam);
+        var url = profileImageStorageService.presignView(targetUserId, regionHint(req));
+        return url.<ResponseEntity<?>>map(u -> ResponseEntity.ok(Map.of(
+                        "userId", targetUserId,
+                        "url", u.toString()))).orElseGet(() -> ResponseEntity.noContent().build());
     }
     // 2) Upload (multipart)
     @PostMapping(value = "/me/profile-image",
             consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
     public SaayamResponse<Map<String, Object>> uploadProfileImage(
             @RequestPart("file") org.springframework.web.multipart.MultipartFile file,
+            @RequestParam(value = "userId", required = false) String userIdParam,
             jakarta.servlet.http.HttpServletRequest req) throws java.io.IOException {
-        var payload = profileImageStorageService.uploadMultipart(
-                currentUserId(req), file, regionHint(req));
+        String targetUserId = resolveUserId(req, userIdParam);
+        var payload = profileImageStorageService.uploadMultipart(targetUserId, file, regionHint(req));
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, payload);
     }
     // 3) DELETE image
     @DeleteMapping("/me/profile-image")
-    public SaayamResponse<Map<String, String>> deleteProfileImage(HttpServletRequest req) {
-        profileImageStorageService.delete(currentUserId(req), regionHint(req));
-        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, Map.of("message", "Profile image deleted"));
+    public SaayamResponse<Map<String, String>> deleteProfileImage(HttpServletRequest req,
+            @RequestParam(value = "userId", required = false) String userIdParam) {
+        String targetUserId = resolveUserId(req, userIdParam);
+        profileImageStorageService.delete(targetUserId, regionHint(req));
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, Map.of(
+                "message", "Profile image deleted", "userId", targetUserId));
     }
 }
