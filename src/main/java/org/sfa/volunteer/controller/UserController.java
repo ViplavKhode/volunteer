@@ -32,7 +32,6 @@ public class UserController {
     private final UserService userService;
     private final ResponseBuilder responseBuilder;
     private final ProfileImageStorageService profileImageStorageService;
-    private static final String HDR_DEV_UID = "X-Dev-UserId";
     private static final String HDR_REGION  = "X-Dev-Region";
 
 
@@ -111,39 +110,31 @@ public class UserController {
     }
     /* Profile Pic Upload */
     // Helper
-    private String currentUserId(HttpServletRequest req) {
-        // Login Payload (In production this comes from the auth payload - JWT)
-        String override = req.getHeader(HDR_DEV_UID);
-        if (override != null && !override.isBlank()) return override;
-        return "11111111-1111-1111-1111-111111111111";
-    }
     private String regionHint(HttpServletRequest req) {
         String r = req.getHeader(HDR_REGION);
         return (r == null || r.isBlank()) ? "us-east-1" : r;
     }
-
-    // 1) GET view URL
-    @GetMapping("/me/profile-image")
-    public ResponseEntity<?> getProfileImage(HttpServletRequest req) {
-        var url = profileImageStorageService.presignView(currentUserId(req), regionHint(req));
-        return url.<ResponseEntity<?>>map(u -> ResponseEntity.ok(Map.of("url", u.toString())))
+    // 1) GET view URL for a given userId
+    @GetMapping("/{userId}/profile-image")
+    public ResponseEntity<?> getProfileImage(@PathVariable String userId, HttpServletRequest req) {
+        var url = profileImageStorageService.presignView(userId, regionHint(req));
+        return url.<ResponseEntity<?>>map(u -> ResponseEntity.ok(Map.of("userId", userId, "url", u.toString())))
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
-    // 2) Upload (multipart)
-    @PostMapping(value = "/me/profile-image",
+    // 2) Upload (multipart) for a given userId
+    @PostMapping(value = "/{userId}/profile-image",
             consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
-    public SaayamResponse<Map<String, Object>> uploadProfileImage(
-            @RequestPart("file") org.springframework.web.multipart.MultipartFile file,
-            jakarta.servlet.http.HttpServletRequest req) throws java.io.IOException {
-        var payload = profileImageStorageService.uploadMultipart(
-                currentUserId(req), file, regionHint(req));
+    public SaayamResponse<Map<String, Object>> uploadProfileImage(@PathVariable String userId,
+            @RequestPart("file") org.springframework.web.multipart.MultipartFile file, HttpServletRequest req) throws java.io.IOException {
+        var payload = profileImageStorageService.uploadMultipart(userId, file, regionHint(req));
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, payload);
     }
-    // 3) DELETE image
-    @DeleteMapping("/me/profile-image")
-    public SaayamResponse<Map<String, String>> deleteProfileImage(HttpServletRequest req) {
-        profileImageStorageService.delete(currentUserId(req), regionHint(req));
-        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, Map.of("message", "Profile image deleted"));
+    // 3) DELETE image for a given userId
+    @DeleteMapping("/{userId}/profile-image")
+    public SaayamResponse<Map<String, String>> deleteProfileImage(@PathVariable String userId, HttpServletRequest req) {
+        profileImageStorageService.delete(userId, regionHint(req));
+        return responseBuilder.buildSuccessResponse(
+                SaayamStatusCode.SUCCESS, Map.of("userId", userId, "message", "Profile image deleted"));
     }
     @DeleteMapping("/profile/signoff/{userId}")
     public SaayamResponse<SignOffResponse> signOffUser(
