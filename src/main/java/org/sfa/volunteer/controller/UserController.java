@@ -149,9 +149,9 @@ public class UserController {
     public SaayamResponse<SignOffResponse> signOffUser(
             @PathVariable String userId,
             @RequestBody(required = false) SignOffRequest request) {
+        String reason = (request != null ? request.reason() : null);
         profileImageStorageService.delete(userId, "us-east-1");
-        SignOffResponse response = userService.signOffUser(userId, request.reason());
-
+        SignOffResponse response = userService.signOffUser(userId, reason);
         return responseBuilder.buildSuccessResponse(
                 SaayamStatusCode.USER_DELETED,
                 new Object[]{userId},

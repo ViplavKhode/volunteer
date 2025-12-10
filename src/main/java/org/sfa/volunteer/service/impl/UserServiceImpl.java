@@ -333,20 +333,15 @@ public class UserServiceImpl implements UserService {
     public SignOffResponse signOffUser(String userId, String reason) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
-
         // Save sign-off reason if provided
         if (reason != null && !reason.isBlank()) {
             userSignOffReasonRepository.save(new UserSignOffReason(reason));
         }
-
         // Delete user
         userRepository.delete(user);
-
         //  Return response
         return new SignOffResponse(
                 userId
         );
-
     }
-
 }
