@@ -26,7 +26,6 @@ public class UserController {
     private final ResponseBuilder responseBuilder;
 
     private final ProfileImageStorageService profileImageStorageService;
-    private static final String HDR_DEV_UID = "X-Dev-UserId";
     private static final String HDR_REGION  = "X-Dev-Region";
 
 
@@ -105,52 +104,30 @@ public class UserController {
     }
     /* Profile Pic Upload */
     // Helper
-    private String currentUserId(HttpServletRequest req) {
-        // Login Payload (In production this comes from the auth payload - JWT)
-        String override = req.getHeader(HDR_DEV_UID);
-        if (override != null && !override.isBlank()) return override;
-        return "11111111-1111-1111-1111-111111111111";
-    }
     private String regionHint(HttpServletRequest req) {
         String r = req.getHeader(HDR_REGION);
         return (r == null || r.isBlank()) ? "us-east-1" : r;
     }
-    // Helper: resolve which userId to use
-    private String resolveUserId(HttpServletRequest req, String userIdParam) {
-        if (userIdParam != null && !userIdParam.isBlank()) {
-            return userIdParam;
-        }
-        return currentUserId(req);
+    // 1) GET view URL for a given userId
+    @GetMapping("/{userId}/profile-image")
+    public ResponseEntity<?> getProfileImage(@PathVariable String userId, HttpServletRequest req) {
+        var url = profileImageStorageService.presignView(userId, regionHint(req));
+        return url.<ResponseEntity<?>>map(u -> ResponseEntity.ok(Map.of("userId", userId, "url", u.toString())))
+                .orElseGet(() -> ResponseEntity.noContent().build());
     }
-
-    // 1) GET view URL
-    @GetMapping("/me/profile-image")
-    public ResponseEntity<?> getProfileImage(HttpServletRequest req,
-            @RequestParam(value = "userId", required = false) String userIdParam) {
-        String targetUserId = resolveUserId(req, userIdParam);
-        var url = profileImageStorageService.presignView(targetUserId, regionHint(req));
-        return url.<ResponseEntity<?>>map(u -> ResponseEntity.ok(Map.of(
-                        "userId", targetUserId,
-                        "url", u.toString()))).orElseGet(() -> ResponseEntity.noContent().build());
-    }
-    // 2) Upload (multipart)
-    @PostMapping(value = "/me/profile-image",
+    // 2) Upload (multipart) for a given userId
+    @PostMapping(value = "/{userId}/profile-image",
             consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
-    public SaayamResponse<Map<String, Object>> uploadProfileImage(
-            @RequestPart("file") org.springframework.web.multipart.MultipartFile file,
-            @RequestParam(value = "userId", required = false) String userIdParam,
-            jakarta.servlet.http.HttpServletRequest req) throws java.io.IOException {
-        String targetUserId = resolveUserId(req, userIdParam);
-        var payload = profileImageStorageService.uploadMultipart(targetUserId, file, regionHint(req));
+    public SaayamResponse<Map<String, Object>> uploadProfileImage(@PathVariable String userId,
+            @RequestPart("file") org.springframework.web.multipart.MultipartFile file, HttpServletRequest req) throws java.io.IOException {
+        var payload = profileImageStorageService.uploadMultipart(userId, file, regionHint(req));
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, payload);
     }
-    // 3) DELETE image
-    @DeleteMapping("/me/profile-image")
-    public SaayamResponse<Map<String, String>> deleteProfileImage(HttpServletRequest req,
-            @RequestParam(value = "userId", required = false) String userIdParam) {
-        String targetUserId = resolveUserId(req, userIdParam);
-        profileImageStorageService.delete(targetUserId, regionHint(req));
-        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, Map.of(
-                "message", "Profile image deleted", "userId", targetUserId));
+    // 3) DELETE image for a given userId
+    @DeleteMapping("/{userId}/profile-image")
+    public SaayamResponse<Map<String, String>> deleteProfileImage(@PathVariable String userId, HttpServletRequest req) {
+        profileImageStorageService.delete(userId, regionHint(req));
+        return responseBuilder.buildSuccessResponse(
+                SaayamStatusCode.SUCCESS, Map.of("userId", userId, "message", "Profile image deleted"));
     }
 }
