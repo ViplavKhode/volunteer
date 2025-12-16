@@ -16,6 +16,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -145,30 +146,31 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public WizardStatusResponse getWizardStatus(String userId) {
-    UserProfileResponse userProfile = getUserProfileById(userId);
+        UserProfileResponse userProfile = getUserProfileById(userId);
 
-    String addressAvailable = (userProfile.addressLine1() != null && !userProfile.addressLine1().trim().isEmpty())
-            ? "Y" : "N";
+        return new WizardStatusResponse(
+            userId,
+            userProfile.promotionWizardStage()
+        );
+    }
 
-    return new WizardStatusResponse(
-        userId,
-        userProfile.promotionWizardStage(),
-        addressAvailable
-    );
-}
+    private boolean isUserAddressAvailable(UserProfileResponse userProfile) {
+        return StringUtils.hasText(userProfile.countryName())
+                && StringUtils.hasText(userProfile.addressLine1())
+                && StringUtils.hasText(userProfile.stateName())
+                && StringUtils.hasText(userProfile.city())
+                && StringUtils.hasText(userProfile.zipCode());
+    }
     
     @Override
     public AddressStatusResponse getAddressStatus(String userId) {
-    UserProfileResponse userProfile = getUserProfileById(userId);
+        UserProfileResponse userProfile = getUserProfileById(userId);
 
-    String addressAvailable = (userProfile.addressLine1() != null && !userProfile.addressLine1().trim().isEmpty())
-            ? "Y" : "N";
-
-    return new AddressStatusResponse(
-        userId,
-        addressAvailable
-    );
-}
+        return new AddressStatusResponse(
+            userId,
+            isUserAddressAvailable(userProfile)
+        );
+    }
 
 
 
