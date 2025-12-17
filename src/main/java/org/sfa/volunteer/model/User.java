@@ -119,6 +119,10 @@ public class User {
     @OneToOne(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     private Volunteer volunteer;
 
+//   Added new mapping for the user notification support
+    @OneToOne(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    private UserNotificationStatus userNotificationStatus;
+
     @Override
     public String toString() {
         return "User{" +

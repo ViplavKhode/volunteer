@@ -10,4 +10,8 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, String> {
 
     List<User> findByPrimaryEmailAddress(String email);
+
+//    Added function for finding user based notifications
+    Optional<User> findById(String id);
+
 }
