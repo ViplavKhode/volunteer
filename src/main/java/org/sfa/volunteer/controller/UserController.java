@@ -115,13 +115,28 @@ public class UserController {
         return url.<ResponseEntity<?>>map(u -> ResponseEntity.ok(Map.of("userId", userId, "url", u.toString())))
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
-    // 2) Upload (multipart) for a given userId
-    @PostMapping(value = "/{userId}/profile-image",
-            consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
-    public SaayamResponse<Map<String, Object>> uploadProfileImage(@PathVariable String userId,
-            @RequestPart("file") org.springframework.web.multipart.MultipartFile file, HttpServletRequest req) throws java.io.IOException {
-        var payload = profileImageStorageService.uploadMultipart(userId, file, regionHint(req));
+    // 2) Generate upload URL
+    @PostMapping("/{userId}/profile-image/upload-url")
+    public SaayamResponse<Map<String, Object>> createUploadUrl(
+            @PathVariable String userId,
+            @RequestParam("contentType") String contentType,
+            @RequestParam("contentLength") long contentLength,
+            HttpServletRequest req) {
+
+        var payload = profileImageStorageService.presignUpload(userId, contentType, contentLength, regionHint(req));
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, payload);
+    }
+    // Confirm upload (save path to DB)
+    @PostMapping("/{userId}/profile-image/confirm")
+    public SaayamResponse<Map<String, String>> confirmUpload(
+            @PathVariable String userId,
+            @RequestBody Map<String, String> body,
+            HttpServletRequest req) {
+
+        String s3Uri = body.get("s3Uri"); // we will return this from upload-url step
+        profileImageStorageService.confirmUpload(userId, s3Uri);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS,
+                Map.of("userId", userId, "message", "Profile image saved"));
     }
     // 3) DELETE image for a given userId
     @DeleteMapping("/{userId}/profile-image")

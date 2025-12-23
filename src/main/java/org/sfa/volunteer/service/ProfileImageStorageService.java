@@ -9,6 +9,9 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 import java.net.URI;
 import java.time.Duration;
@@ -55,6 +58,9 @@ public class ProfileImageStorageService {
 
     @Value("${saayam.s3.keyPattern:users/%s/profile.jpg}")
     private String keyPattern;
+
+    @Value("${saayam.s3.presign.putTtlSeconds:300}")
+    private int putTtlSeconds;
 
     // Local memory cache
     private final Map<String, String> keyByUser = new ConcurrentHashMap<>();
@@ -169,59 +175,66 @@ public class ProfileImageStorageService {
         userService.setProfilePicturePath(userId, null);
     }
 
-    public Map<String, Object> uploadMultipart(String userId,
-                                               org.springframework.web.multipart.MultipartFile file,
-                                               String regionHint) throws java.io.IOException {
-        // Ensure user exists before touching S3
+    public Map<String, Object> presignUpload(String userId, String contentType, long contentLength, String regionHint) {
+
+        // 0) Ensure user exists before touching S3
         if (!userService.userExists(userId)) {
             throw new org.sfa.volunteer.exception.UserNotFoundException(userId);
         }
-        // 1) Validate content-type + size
-        validate(file.getContentType(), file.getSize());
 
-        // 2) Determine bucket/key/client
+        // 1) Validate (re-use existing validate)
+        validate(contentType, contentLength);
+
+        // 2) Bucket/key
         String bucket = pickBucket(regionHint);
-        String key    = buildKey(userId, file.getContentType());
-        S3Client s3   = pickClient(regionHint);
+        String key = buildKey(userId, contentType);
 
-        // 3) Put to S3
-        software.amazon.awssdk.services.s3.model.PutObjectRequest putReq =
-                software.amazon.awssdk.services.s3.model.PutObjectRequest.builder()
-                        .bucket(bucket)
-                        .key(key)
-                        .contentType(file.getContentType())
-                        .serverSideEncryption("AES256")
-                        .build();
+        // 3) Presign PUT
+        PutObjectRequest putReq = PutObjectRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .contentType(contentType)
+                .serverSideEncryption("AES256")
+                .build();
 
-        s3.putObject(putReq, software.amazon.awssdk.core.sync.RequestBody.fromBytes(file.getBytes()));
+        PresignedPutObjectRequest presigned = pickPresigner(regionHint)
+                .presignPutObject(PutObjectPresignRequest.builder()
+                        .signatureDuration(Duration.ofSeconds(putTtlSeconds))
+                        .putObjectRequest(putReq)
+                        .build());
 
-        // 4) Save canonical S3 URI to DB + cache key
+        // 4) Canonical S3 URI (what we store later in DB)
         String s3Uri = "s3://" + bucket + "/" + key;
-        userService.setProfilePicturePath(userId, s3Uri);
+
         keyByUser.put(userId, key);
 
-        // 5) Return a presigned GET now for immediate preview
-        software.amazon.awssdk.services.s3.model.GetObjectRequest getReq =
-                software.amazon.awssdk.services.s3.model.GetObjectRequest.builder()
-                        .bucket(bucket)
-                        .key(key)
-                        .build();
-
-        java.net.URI viewUrl = java.net.URI.create(
-                pickPresigner(regionHint)
-                        .presignGetObject(g -> g
-                                .signatureDuration(java.time.Duration.ofSeconds(getTtlSeconds))
-                                .getObjectRequest(getReq))
-                        .url().toString()
-        );
-
-        return java.util.Map.of(
-                "message", "Uploaded",
+        return Map.of(
+                "message", "Presigned upload URL generated",
                 "userId", userId,
+                "bucket", bucket,
                 "key", key,
                 "s3Uri", s3Uri,
-                "viewUrl", viewUrl.toString()
+                "putUrl", presigned.url().toString(),
+                "expiresInSeconds", putTtlSeconds
         );
+    }
+
+    public void confirmUpload(String userId, String s3Uri) {
+        if (!userService.userExists(userId)) {
+            throw new org.sfa.volunteer.exception.UserNotFoundException(userId);
+        }
+        userService.setProfilePicturePath(userId, s3Uri);
+
+        try {
+            var uri = URI.create(s3Uri);
+            String ssp = uri.getSchemeSpecificPart();
+            if (ssp.startsWith("//")) ssp = ssp.substring(2);
+            int slash = ssp.indexOf('/');
+            if (slash > 0) {
+                String key = ssp.substring(slash + 1);
+                keyByUser.put(userId, key);
+            }
+        } catch (Exception ignored) { }
     }
 
     // helper
