@@ -7,10 +7,16 @@ import org.sfa.volunteer.dto.request.CreateUserRequest;
 import org.sfa.volunteer.dto.request.UpdateOrganizationRequest;
 import org.sfa.volunteer.dto.request.UpdateUserProfileRequest;
 import org.sfa.volunteer.dto.response.*;
+import org.sfa.volunteer.service.ProfileImageStorageService;
 import org.sfa.volunteer.service.UserService;
 import org.sfa.volunteer.util.ResponseBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/0.0.1/users")
@@ -19,10 +25,15 @@ public class UserController {
     private final UserService userService;
     private final ResponseBuilder responseBuilder;
 
+    private final ProfileImageStorageService profileImageStorageService;
+    private static final String HDR_REGION  = "X-Dev-Region";
+
+
     @Autowired
-    public UserController(UserService userService, ResponseBuilder responseBuilder) {
+    public UserController(UserService userService, ResponseBuilder responseBuilder, ProfileImageStorageService profileImageStorageService) {
         this.userService = userService;
         this.responseBuilder = responseBuilder;
+        this.profileImageStorageService = profileImageStorageService;
     }
 
     @PostMapping
@@ -91,5 +102,47 @@ public class UserController {
         OrganizationResponse organization = userService.getOrganizationByUserId(userId);
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userId}, organization);
     }
+    /* Profile Pic Upload */
+    // Helper
+    private String regionHint(HttpServletRequest req) {
+        String r = req.getHeader(HDR_REGION);
+        return (r == null || r.isBlank()) ? "us-east-1" : r;
+    }
+    // 1) GET view URL for a given userId
+    @GetMapping("/{userId}/profile-image")
+    public ResponseEntity<?> getProfileImage(@PathVariable String userId, HttpServletRequest req) {
+        var url = profileImageStorageService.presignView(userId, regionHint(req));
+        return url.<ResponseEntity<?>>map(u -> ResponseEntity.ok(Map.of("userId", userId, "url", u.toString())))
+                .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+    // 2) Generate upload URL
+    @PostMapping("/{userId}/profile-image/upload-url")
+    public SaayamResponse<Map<String, Object>> createUploadUrl(
+            @PathVariable String userId,
+            @RequestParam("contentType") String contentType,
+            @RequestParam("contentLength") long contentLength,
+            HttpServletRequest req) {
 
+        var payload = profileImageStorageService.presignUpload(userId, contentType, contentLength, regionHint(req));
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, payload);
+    }
+    // Confirm upload (save path to DB)
+    @PostMapping("/{userId}/profile-image/confirm")
+    public SaayamResponse<Map<String, String>> confirmUpload(
+            @PathVariable String userId,
+            @RequestBody Map<String, String> body,
+            HttpServletRequest req) {
+
+        String s3Uri = body.get("s3Uri"); // we will return this from upload-url step
+        profileImageStorageService.confirmUpload(userId, s3Uri);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS,
+                Map.of("userId", userId, "message", "Profile image saved"));
+    }
+    // 3) DELETE image for a given userId
+    @DeleteMapping("/{userId}/profile-image")
+    public SaayamResponse<Map<String, String>> deleteProfileImage(@PathVariable String userId, HttpServletRequest req) {
+        profileImageStorageService.delete(userId, regionHint(req));
+        return responseBuilder.buildSuccessResponse(
+                SaayamStatusCode.SUCCESS, Map.of("userId", userId, "message", "Profile image deleted"));
+    }
 }
