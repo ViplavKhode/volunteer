@@ -219,22 +219,31 @@ public class ProfileImageStorageService {
         );
     }
 
-    public void confirmUpload(String userId, String s3Uri) {
+    public Map<String, Object> confirmUpload(String userId, String s3Uri) {
         if (!userService.userExists(userId)) {
             throw new org.sfa.volunteer.exception.UserNotFoundException(userId);
         }
+
         userService.setProfilePicturePath(userId, s3Uri);
 
+        String key = null;
         try {
             var uri = URI.create(s3Uri);
             String ssp = uri.getSchemeSpecificPart();
             if (ssp.startsWith("//")) ssp = ssp.substring(2);
             int slash = ssp.indexOf('/');
             if (slash > 0) {
-                String key = ssp.substring(slash + 1);
+                key = ssp.substring(slash + 1);
                 keyByUser.put(userId, key);
             }
         } catch (Exception ignored) { }
+
+        return Map.of(
+                "message", "Profile image confirmed",
+                "userId", userId,
+                "s3Uri", s3Uri,
+                "key", key
+        );
     }
 
     // helper
