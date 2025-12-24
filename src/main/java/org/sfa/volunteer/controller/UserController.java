@@ -6,13 +6,20 @@ import org.sfa.volunteer.dto.common.SaayamStatusCode;
 import org.sfa.volunteer.dto.request.CreateUserRequest;
 import org.sfa.volunteer.dto.request.UpdateOrganizationRequest;
 import org.sfa.volunteer.dto.request.UpdateUserProfileRequest;
+import org.sfa.volunteer.dto.request.SignOffRequest;
+import org.sfa.volunteer.dto.response.AddressStatusResponse;
+import org.sfa.volunteer.dto.response.CreateUserResponse;
+import org.sfa.volunteer.dto.response.OrganizationResponse;
+import org.sfa.volunteer.dto.response.PaginationResponse;
+import org.sfa.volunteer.dto.response.SignOffResponse;
+import org.sfa.volunteer.dto.response.UserProfileResponse;
+import org.sfa.volunteer.dto.response.WizardStatusResponse;
 import org.sfa.volunteer.dto.response.*;
 import org.sfa.volunteer.service.ProfileImageStorageService;
 import org.sfa.volunteer.service.UserService;
 import org.sfa.volunteer.util.ResponseBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
-
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,11 +27,10 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/0.0.1/users")
-
 public class UserController {
+
     private final UserService userService;
     private final ResponseBuilder responseBuilder;
-
     private final ProfileImageStorageService profileImageStorageService;
     private static final String HDR_REGION  = "X-Dev-Region";
 
@@ -68,7 +74,7 @@ public class UserController {
         WizardStatusResponse response = userService.getWizardStatus(userId);
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userId}, response);
     }
-    
+
     @GetMapping("/addressStatus/{userId}")
     public SaayamResponse<AddressStatusResponse> getAddressStatus(@PathVariable String userId) {
     	AddressStatusResponse response = userService.getAddressStatus(userId);
@@ -144,5 +150,18 @@ public class UserController {
         profileImageStorageService.delete(userId, regionHint(req));
         return responseBuilder.buildSuccessResponse(
                 SaayamStatusCode.SUCCESS, Map.of("userId", userId, "message", "Profile image deleted"));
+    }
+    @DeleteMapping("/profile/signoff/{userId}")
+    public SaayamResponse<SignOffResponse> signOffUser(
+            @PathVariable String userId,
+            @RequestBody(required = false) SignOffRequest request) {
+        String reason = (request != null ? request.reason() : null);
+        profileImageStorageService.delete(userId, "us-east-1");
+        SignOffResponse response = userService.signOffUser(userId, reason);
+        return responseBuilder.buildSuccessResponse(
+                SaayamStatusCode.USER_DELETED,
+                new Object[]{userId},
+                response
+        );
     }
 }

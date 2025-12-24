@@ -4,12 +4,31 @@ import jakarta.transaction.Transactional;
 import org.sfa.volunteer.dto.request.CreateUserRequest;
 import org.sfa.volunteer.dto.request.UpdateOrganizationRequest;
 import org.sfa.volunteer.dto.request.UpdateUserProfileRequest;
-import org.sfa.volunteer.dto.response.*;
+import org.sfa.volunteer.dto.response.AddressStatusResponse;
+import org.sfa.volunteer.dto.response.CreateUserResponse;
+import org.sfa.volunteer.dto.response.OrganizationResponse;
+import org.sfa.volunteer.dto.response.PaginationResponse;
+import org.sfa.volunteer.dto.response.SignOffResponse;
+import org.sfa.volunteer.dto.response.UserProfileResponse;
+import org.sfa.volunteer.dto.response.WizardStatusResponse;
 import org.sfa.volunteer.exception.UserCategoryNotFoundException;
 import org.sfa.volunteer.exception.UserNotFoundException;
 import org.sfa.volunteer.exception.UserOrganizationNotFoundException;
-import org.sfa.volunteer.model.*;
-import org.sfa.volunteer.repository.*;
+import org.sfa.volunteer.model.Country;
+import org.sfa.volunteer.model.Organization;
+import org.sfa.volunteer.model.State;
+import org.sfa.volunteer.model.User;
+import org.sfa.volunteer.model.UserCategory;
+import org.sfa.volunteer.model.UserSignOffReason;
+import org.sfa.volunteer.model.UserStatus;
+import org.sfa.volunteer.repository.CountryRepository;
+import org.sfa.volunteer.repository.OrganizationRepository;
+import org.sfa.volunteer.repository.StateRepository;
+import org.sfa.volunteer.repository.UserCategoryRepository;
+import org.sfa.volunteer.repository.UserRepository;
+import org.sfa.volunteer.repository.UserSignOffReasonRepository;
+import org.sfa.volunteer.repository.UserStatusRepository;
+import org.sfa.volunteer.service.ProfileImageStorageService;
 import org.sfa.volunteer.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -17,12 +36,13 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -30,7 +50,7 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final UserStatusRepository userStatusRepository;
     private final OrganizationRepository organizationRepository;
-
+    private final UserSignOffReasonRepository userSignOffReasonRepository;
     private final UserCategoryRepository userCategoryRepository;
     private final CountryRepository countryRepository;
     private final StateRepository stateRepository;
@@ -44,14 +64,22 @@ public class UserServiceImpl implements UserService {
     private static final Integer VOLUNTEER_CATEGORY_ID = 2; // User Category: volunteer
 
     @Autowired
-    public UserServiceImpl(UserRepository userRepository, UserStatusRepository userStatusRepository, OrganizationRepository organizationRepository, UserCategoryRepository userCategoryRepository,
-                           CountryRepository countryRepository, StateRepository stateRepository) {
+    public UserServiceImpl(
+            UserRepository userRepository,
+            UserStatusRepository userStatusRepository,
+            OrganizationRepository organizationRepository,
+            UserCategoryRepository userCategoryRepository,
+            CountryRepository countryRepository,
+            StateRepository stateRepository,
+            UserSignOffReasonRepository userSignOffReasonRepository) {
+
         this.userRepository = userRepository;
         this.userStatusRepository = userStatusRepository;
         this.organizationRepository = organizationRepository;
         this.userCategoryRepository = userCategoryRepository;
         this.countryRepository = countryRepository;
         this.stateRepository = stateRepository;
+        this.userSignOffReasonRepository = userSignOffReasonRepository;
     }
 
     @Override
@@ -85,7 +113,7 @@ public class UserServiceImpl implements UserService {
         return CreateUserResponse.builder()
                 .name(user.getFullName())
                 .email(user.getPrimaryEmailAddress())
-                .phoneNumber(user.getPrimaryEmailAddress())
+                .phoneNumber(user.getPrimaryPhoneNumber())
                 .timeZone(user.getTimeZone())
                 .userId(user.getId())
                 .countryName(user.getCountry() != null ? user.getCountry().getCountryName() : null)
@@ -266,7 +294,6 @@ public class UserServiceImpl implements UserService {
         return OrganizationResponse.builder()
                 .id(organization.getId())
                 .organizationName(organization.getOrganizationName())
-                .organizationName(organization.getOrganizationName())
                 .organizationType(organization.getOrganizationType())
                 .phoneNumber(organization.getPhoneNumber())
                 .email(organization.getEmail())
@@ -288,7 +315,6 @@ public class UserServiceImpl implements UserService {
         user.setLastUpdateDate(ZonedDateTime.now(ZoneId.of("UTC")));
         userRepository.save(user);
     }
-
     @Override
     public Optional<String> getProfilePicturePath(String userId) {
         return userRepository.findById(userId)
@@ -296,9 +322,26 @@ public class UserServiceImpl implements UserService {
                 .filter(Objects::nonNull)
                 .filter(s -> !s.isBlank());
     }
+
     @Override
     public boolean userExists(String userId) {
         return userRepository.existsById(userId);
     }
 
+    @Transactional
+    @Override
+    public SignOffResponse signOffUser(String userId, String reason) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+        // Save sign-off reason if provided
+        if (reason != null && !reason.isBlank()) {
+            userSignOffReasonRepository.save(new UserSignOffReason(reason));
+        }
+        // Delete user
+        userRepository.delete(user);
+        //  Return response
+        return new SignOffResponse(
+                userId
+        );
+    }
 }
