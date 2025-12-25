@@ -11,16 +11,22 @@ import org.sfa.volunteer.dto.common.SaayamResponse;
 import org.sfa.volunteer.dto.common.SaayamStatusCode;
 import org.sfa.volunteer.service.ProfileImageStorageService;
 import org.sfa.volunteer.util.ResponseBuilder;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 import java.net.URI;
 import java.util.Map;
 import java.util.Optional;
+import org.springframework.boot.WebApplicationType;
+import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.context.ConfigurableApplicationContext;
+
 
 public class GetProfileImageHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
 
-    private static final ApplicationContext ctx = new AnnotationConfigApplicationContext(VolunteerApplication.class);
+    private static final ConfigurableApplicationContext ctx;
+    static {
+        String profile = System.getenv().getOrDefault("SPRING_PROFILES_ACTIVE", "dev");
+        ctx = new SpringApplicationBuilder(VolunteerApplication.class).profiles(profile).web(WebApplicationType.NONE).run();
+    }
     private static final ProfileImageStorageService profileService = ctx.getBean(ProfileImageStorageService.class);
     private static final ResponseBuilder responseBuilder = ctx.getBean(ResponseBuilder.class);
 
