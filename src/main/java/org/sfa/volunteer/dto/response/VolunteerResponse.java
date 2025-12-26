@@ -1,22 +1,22 @@
 package org.sfa.volunteer.dto.response;
 
-import jakarta.validation.constraints.NotBlank;
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Builder;
 
-import java.time.ZonedDateTime;
-import java.util.List;
+import java.time.LocalDateTime;
 
 @Builder
 public record VolunteerResponse(
         String id,
-        @NotBlank String userId,
+        String userId,
         Boolean termsAndConditions,
-        ZonedDateTime tcUpdateDate,
-        String govtIdFilename,
-        ZonedDateTime govtUpdateDate,
-        List<String> skills,
-        Boolean notification,
-        Boolean isCompleted,
-        ZonedDateTime completedDate,
-        List<VolunteerUserAvailabilityResponse> availability) {
+        LocalDateTime termsAcceptedAt,
+        String govtIdPath1,
+        String govtIdPath2,
+        LocalDateTime path1UpdatedAt,
+        LocalDateTime path2UpdatedAt,
+        JsonNode availabilityDays,
+        JsonNode availabilityTimes,
+        LocalDateTime createdAt,
+        LocalDateTime lastUpdatedAt) {
 }

@@ -18,6 +18,7 @@ import org.sfa.volunteer.util.ResponseBuilder;
 import org.springframework.boot.SpringApplication;
 import org.springframework.context.ApplicationContext;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -27,8 +28,10 @@ public class UpdateOrganizationHandler implements RequestHandler<APIGatewayProxy
     private static final ResponseBuilder responseBuilder;
     private static final MessageSourceUtil messageSourceUtil;
     private static final ObjectMapper objectMapper;
+    private static final Map<String, String> CORS_HEADERS = new HashMap<>();
 
     static {
+        // Initializing Spring context
         ApplicationContext context = SpringApplication.run(VolunteerApplication.class);
         userService = context.getBean(UserService.class);
         responseBuilder = context.getBean(ResponseBuilder.class);
@@ -36,11 +39,18 @@ public class UpdateOrganizationHandler implements RequestHandler<APIGatewayProxy
         objectMapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
                 .enable(SerializationFeature.INDENT_OUTPUT);
+
+        // CORS headers
+        CORS_HEADERS.put("Access-Control-Allow-Origin", "*");
+        CORS_HEADERS.put("Access-Control-Allow-Methods", "GET,OPTIONS,PUT");
+        CORS_HEADERS.put("Access-Control-Allow-Headers", "Content-Type,Authorization");
     }
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent req, Context ctx) {
         APIGatewayProxyResponseEvent resp = new APIGatewayProxyResponseEvent();
+        // Adding CORS headers to all responses
+        resp.setHeaders(CORS_HEADERS);
         try {
             String userId = Optional.ofNullable(req.getPathParameters())
                     .map(p -> p.get("userId"))
