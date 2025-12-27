@@ -27,4 +27,6 @@ public interface UserService {
 
     OrganizationResponse getOrganizationByUserId(String userId);
 
+    UserIdResponse getUserIdByEmail(String email);
+
 }
