@@ -21,28 +21,19 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.context.ApplicationContext;
 
 public class GetUserWizardStatusHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
-    private final UserService userService;
-    private final ObjectMapper objectMapper;
-    private final ResponseBuilder responseBuilder;
-    private final MessageSourceUtil messageSourceUtil;
+    private static final UserService userService;
+    private static final ObjectMapper objectMapper = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .enable(SerializationFeature.INDENT_OUTPUT);
+    private static final ResponseBuilder responseBuilder;
+    private static final MessageSourceUtil messageSourceUtil;
 
 
-    private static class LazyInit {
-        static final ApplicationContext appCtx = SpringApplication.run(VolunteerApplication.class);
-        static final ObjectMapper objectMapper = new ObjectMapper()
-                .registerModule(new JavaTimeModule())
-                .enable(SerializationFeature.INDENT_OUTPUT);
-    }
-
-    public GetUserWizardStatusHandler() {
-        this(LazyInit.appCtx.getBean(UserService.class), LazyInit.appCtx.getBean(ResponseBuilder.class), LazyInit.appCtx.getBean(MessageSourceUtil.class), LazyInit.objectMapper);
-    }
-
-    public GetUserWizardStatusHandler(UserService userService, ResponseBuilder responseBuilder, MessageSourceUtil messageSourceUtil, ObjectMapper objectMapper) {
-        this.userService = userService;
-        this.responseBuilder = responseBuilder;
-        this.messageSourceUtil = messageSourceUtil;
-        this.objectMapper = objectMapper;
+    static {
+        ApplicationContext context = SpringApplication.run(VolunteerApplication.class);
+        userService = context.getBean(UserService.class);
+        responseBuilder = context.getBean(ResponseBuilder.class);
+        messageSourceUtil = context.getBean(MessageSourceUtil.class);
     }
 
     @Override
