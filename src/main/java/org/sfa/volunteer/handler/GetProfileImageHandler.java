@@ -22,11 +22,11 @@ import org.springframework.context.ConfigurableApplicationContext;
 
 public class GetProfileImageHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
 
-    private static final ConfigurableApplicationContext ctx;
-    static {
-        String profile = System.getenv().getOrDefault("SPRING_PROFILES_ACTIVE", "dev");
-        ctx = new SpringApplicationBuilder(VolunteerApplication.class).profiles(profile).web(WebApplicationType.NONE).run();
-    }
+    private static final ConfigurableApplicationContext ctx =
+            new SpringApplicationBuilder(VolunteerApplication.class).web(WebApplicationType.NONE)
+                    .properties("spring.main.web-application-type=none",
+                            "spring.autoconfigure.exclude=org.springframework.cloud.function.serverless.web.ServerlessAutoConfiguration"
+                    ).run();
     private static final ProfileImageStorageService profileService = ctx.getBean(ProfileImageStorageService.class);
     private static final ResponseBuilder responseBuilder = ctx.getBean(ResponseBuilder.class);
 
