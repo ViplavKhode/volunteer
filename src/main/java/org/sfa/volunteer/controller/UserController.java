@@ -11,11 +11,14 @@ import org.sfa.volunteer.service.ProfileImageStorageService;
 import org.sfa.volunteer.service.UserService;
 import org.sfa.volunteer.util.ResponseBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+
 import java.util.Map;
 
 @RestController
@@ -111,32 +114,40 @@ public class UserController {
     // 1) GET view URL for a given userId
     @GetMapping("/{userId}/profile-image")
     public ResponseEntity<?> getProfileImage(@PathVariable String userId, HttpServletRequest req) {
-        var url = profileImageStorageService.presignView(userId, regionHint(req));
-        return url.<ResponseEntity<?>>map(u -> ResponseEntity.ok(Map.of("userId", userId, "url", u.toString())))
-                .orElseGet(() -> ResponseEntity.noContent().build());
+
+        var out = profileImageStorageService.download(userId, regionHint(req));
+
+        boolean found = (boolean) out.get("found");
+        if (!found) {return ResponseEntity.noContent().build();}
+
+        String contentType = (String) out.get("contentType");
+        byte[] bytes = (byte[]) out.get("bytes");
+
+        return ResponseEntity.ok()
+                .header("Content-Type", contentType)
+                .body(bytes);
     }
-    // 2) Generate upload URL
-    @PostMapping("/{userId}/profile-image/upload-url")
-    public SaayamResponse<Map<String, Object>> createUploadUrl(
+    // Upload profile image (Base64)
+    @PostMapping("/{userId}/profile-image")
+    public SaayamResponse<Map<String, Object>> uploadProfileImage(
             @PathVariable String userId,
-            @RequestParam("contentType") String contentType,
-            @RequestParam("contentLength") long contentLength,
+            @RequestBody Map<String, Object> body,
             HttpServletRequest req) {
 
-        var payload = profileImageStorageService.presignUpload(userId, contentType, contentLength, regionHint(req));
+        String contentType = (String) body.get("contentType");
+        String base64 = (String) body.get("base64");
+
+        if (contentType == null || contentType.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "contentType is required");
+        }
+
+        if (base64 == null || base64.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "base64 is required");
+        }
+
+        var payload = profileImageStorageService.uploadBase64(userId, contentType, base64, regionHint(req));
+
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, payload);
-    }
-    // Confirm upload (save path to DB)
-    @PostMapping("/{userId}/profile-image/confirm")
-    public SaayamResponse<Map<String, String>> confirmUpload(
-            @PathVariable String userId,
-            @RequestBody Map<String, String> body,
-            HttpServletRequest req) {
-
-        String s3Uri = body.get("s3Uri"); // we will return this from upload-url step
-        profileImageStorageService.confirmUpload(userId, s3Uri);
-        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS,
-                Map.of("userId", userId, "message", "Profile image saved"));
     }
     // 3) DELETE image for a given userId
     @DeleteMapping("/{userId}/profile-image")

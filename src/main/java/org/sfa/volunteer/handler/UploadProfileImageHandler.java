@@ -2,15 +2,21 @@ package org.sfa.volunteer.handler;
 
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.sfa.volunteer.VolunteerApplication;
 import org.sfa.volunteer.service.ProfileImageStorageService;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
-public class GetProfileImageHandler implements RequestHandler<Map<String, Object>, Map<String, Object>> {
+public class UploadProfileImageHandler implements RequestHandler<Map<String, Object>, Map<String, Object>> {
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private static final ConfigurableApplicationContext ctx =
             new SpringApplicationBuilder(VolunteerApplication.class)
@@ -27,20 +33,22 @@ public class GetProfileImageHandler implements RequestHandler<Map<String, Object
     @Override
     public Map<String, Object> handleRequest(Map<String, Object> event, Context context) {
         try {
-            String userId = readPathUserId(event);
+            String userId = readUserId(event);
             String region = readHeader(event, "X-Dev-Region", "us-east-1");
 
+            Map<String, Object> body = readBodyAsMap(event);
+
+            String base64 = asString(body.get("base64"));
+            String contentType = asString(body.getOrDefault("contentType", "image/jpeg"));
+
             if (userId == null || userId.isBlank()) {
-                return error(400, "userId is required in pathParameters");
+                return error(400, "userId is required");
+            }
+            if (base64 == null || base64.isBlank()) {
+                return error(400, "base64 is required");
             }
 
-            // expects: { "contentType": "image/jpeg", "base64": "...." } OR empty if not found
-            Map<String, Object> result = storage.downloadBase64(userId, region);
-
-            // if service returns empty → map it to 204
-            if (result == null || result.isEmpty()) {
-                return Map.of("statusCode", 204, "body", "");
-            }
+            Map<String, Object> result = storage.uploadBase64(userId, base64, contentType, region);
 
             return ok(result);
 
@@ -49,13 +57,33 @@ public class GetProfileImageHandler implements RequestHandler<Map<String, Object
         }
     }
 
-    private static String readPathUserId(Map<String, Object> event) {
+    // -------- helpers --------
+
+    private static Map<String, Object> readBodyAsMap(Map<String, Object> event) throws Exception {
+        Object bodyObj = event.get("body");
+        if (bodyObj == null) return Collections.emptyMap();
+
+        if (bodyObj instanceof Map<?, ?> m) {
+            Map<String, Object> out = new HashMap<>();
+            m.forEach((k, v) -> out.put(String.valueOf(k), v));
+            return out;
+        }
+        String bodyStr = String.valueOf(bodyObj);
+        if (bodyStr.isBlank()) return Collections.emptyMap();
+
+        return MAPPER.readValue(bodyStr, new TypeReference<Map<String, Object>>() {});
+    }
+
+    private static String readUserId(Map<String, Object> event) throws Exception {
         Object pp = event.get("pathParameters");
         if (pp instanceof Map<?, ?> m) {
             Object v = m.get("userId");
             if (v != null) return String.valueOf(v);
         }
-        return null;
+
+        Map<String, Object> body = readBodyAsMap(event);
+        Object v = body.get("userId");
+        return v == null ? null : String.valueOf(v);
     }
 
     private static String readHeader(Map<String, Object> event, String headerName, String defaultVal) {
@@ -66,6 +94,10 @@ public class GetProfileImageHandler implements RequestHandler<Map<String, Object
             if (v != null && !String.valueOf(v).isBlank()) return String.valueOf(v);
         }
         return defaultVal;
+    }
+
+    private static String asString(Object o) {
+        return (o == null) ? null : String.valueOf(o);
     }
 
     private static Map<String, Object> ok(Object body) {
