@@ -4,13 +4,12 @@ import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.sfa.volunteer.VolunteerApplication;
-import org.sfa.volunteer.service.ProfileImageStorageService;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.sfa.volunteer.VolunteerApplication;
+import org.sfa.volunteer.service.ProfileImageStorageService;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -18,7 +17,7 @@ public class UploadProfileImageHandler implements RequestHandler<Map<String, Obj
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private static final ConfigurableApplicationContext ctx =
+    private static final ConfigurableApplicationContext CTX =
             new SpringApplicationBuilder(VolunteerApplication.class)
                     .web(WebApplicationType.NONE)
                     .properties(
@@ -27,92 +26,85 @@ public class UploadProfileImageHandler implements RequestHandler<Map<String, Obj
                     )
                     .run();
 
-    private final ProfileImageStorageService storage =
-            ctx.getBean(ProfileImageStorageService.class);
+    private final ProfileImageStorageService storage = CTX.getBean(ProfileImageStorageService.class);
 
     @Override
     public Map<String, Object> handleRequest(Map<String, Object> event, Context context) {
         try {
-            String userId = readUserId(event);
-            String region = readHeader(event, "X-Dev-Region", "us-east-1");
+            String region = header(event, "X-Dev-Region", "us-east-1");
 
-            Map<String, Object> body = readBodyAsMap(event);
+            String bodyJson = asString(event.get("body"));
+            Map<String, Object> body = MAPPER.readValue(bodyJson, new TypeReference<>() {});
 
+            String userId = asString(body.get("userId"));
+            String contentType = asString(body.get("contentType"));
             String base64 = asString(body.get("base64"));
-            String contentType = asString(body.getOrDefault("contentType", "image/jpeg"));
 
-            if (userId == null || userId.isBlank()) {
-                return error(400, "userId is required");
-            }
-            if (base64 == null || base64.isBlank()) {
-                return error(400, "base64 is required");
+            if (isBlank(userId) || isBlank(contentType) || isBlank(base64)) {
+                return apiError(400, "userId, contentType, base64 are required");
             }
 
-            Map<String, Object> result = storage.uploadBase64(userId, base64, contentType, region);
+            Map<String, Object> result = storage.uploadBase64(userId, contentType, base64, region);
 
-            return ok(result);
+            return apiJson(200, Map.of(
+                    "message", "Profile image uploaded",
+                    "data", result
+            ));
 
         } catch (Exception e) {
-            return error(500, e.getMessage());
+            return apiError(500, safeMsg(e));
         }
     }
 
-    // -------- helpers --------
+    // ---------- helpers ----------
+    private static String header(Map<String, Object> event, String name, String def) {
+        Object headersObj = event.get("headers");
+        if (!(headersObj instanceof Map)) return def;
 
-    private static Map<String, Object> readBodyAsMap(Map<String, Object> event) throws Exception {
-        Object bodyObj = event.get("body");
-        if (bodyObj == null) return Collections.emptyMap();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> headers = (Map<String, Object>) headersObj;
 
-        if (bodyObj instanceof Map<?, ?> m) {
-            Map<String, Object> out = new HashMap<>();
-            m.forEach((k, v) -> out.put(String.valueOf(k), v));
-            return out;
+        for (Map.Entry<String, Object> en : headers.entrySet()) {
+            if (en.getKey() != null && en.getKey().equalsIgnoreCase(name)) {
+                String v = asString(en.getValue());
+                return isBlank(v) ? def : v;
+            }
         }
-        String bodyStr = String.valueOf(bodyObj);
-        if (bodyStr.isBlank()) return Collections.emptyMap();
-
-        return MAPPER.readValue(bodyStr, new TypeReference<Map<String, Object>>() {});
+        return def;
     }
 
-    private static String readUserId(Map<String, Object> event) throws Exception {
-        Object pp = event.get("pathParameters");
-        if (pp instanceof Map<?, ?> m) {
-            Object v = m.get("userId");
-            if (v != null) return String.valueOf(v);
-        }
-
-        Map<String, Object> body = readBodyAsMap(event);
-        Object v = body.get("userId");
-        return v == null ? null : String.valueOf(v);
+    private static Map<String, Object> apiJson(int status, Object payload) throws Exception {
+        Map<String, Object> resp = new HashMap<>();
+        resp.put("statusCode", status);
+        resp.put("headers", Map.of("Content-Type", "application/json"));
+        resp.put("isBase64Encoded", false);
+        resp.put("body", MAPPER.writeValueAsString(payload));
+        return resp;
     }
 
-    private static String readHeader(Map<String, Object> event, String headerName, String defaultVal) {
-        Object headers = event.get("headers");
-        if (headers instanceof Map<?, ?> m) {
-            Object v = m.get(headerName);
-            if (v == null) v = m.get(headerName.toLowerCase());
-            if (v != null && !String.valueOf(v).isBlank()) return String.valueOf(v);
+    private static Map<String, Object> apiError(int status, String msg) {
+        try {
+            return apiJson(status, Map.of("message", msg));
+        } catch (Exception e) {
+            Map<String, Object> resp = new HashMap<>();
+            resp.put("statusCode", status);
+            resp.put("headers", Map.of("Content-Type", "application/json"));
+            resp.put("isBase64Encoded", false);
+            resp.put("body", "{\"message\":\"" + msg.replace("\"", "'") + "\"}");
+            return resp;
         }
-        return defaultVal;
     }
 
     private static String asString(Object o) {
-        return (o == null) ? null : String.valueOf(o);
+        return o == null ? null : String.valueOf(o);
     }
 
-    private static Map<String, Object> ok(Object body) {
-        return Map.of(
-                "statusCode", 200,
-                "headers", Map.of("Content-Type", "application/json"),
-                "body", body
-        );
+    private static boolean isBlank(String s) {
+        return s == null || s.trim().isEmpty();
     }
 
-    private static Map<String, Object> error(int status, String msg) {
-        return Map.of(
-                "statusCode", status,
-                "headers", Map.of("Content-Type", "application/json"),
-                "body", Map.of("message", msg)
-        );
+    private static String safeMsg(Exception e) {
+        String m = e.getMessage();
+        return (m == null || m.isBlank()) ? e.getClass().getSimpleName() : m;
     }
 }

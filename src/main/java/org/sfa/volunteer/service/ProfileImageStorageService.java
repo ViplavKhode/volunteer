@@ -5,17 +5,17 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import software.amazon.awssdk.core.ResponseBytes;
+import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+
 import java.net.URI;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import software.amazon.awssdk.core.ResponseBytes;
-import software.amazon.awssdk.core.sync.RequestBody;
-import software.amazon.awssdk.services.s3.model.GetObjectResponse;
-import java.util.Base64;
 
 @Service
 public class ProfileImageStorageService {
@@ -23,16 +23,6 @@ public class ProfileImageStorageService {
     private final UserService userService;
     private final S3Client s3ClientUs;
     private final S3Client s3ClientEu;
-
-    public ProfileImageStorageService(
-            UserService userService,
-            @Qualifier("s3ClientUs") S3Client s3ClientUs,
-            @Qualifier("s3ClientEu") S3Client s3ClientEu
-    ) {
-        this.userService = userService;
-        this.s3ClientUs = s3ClientUs;
-        this.s3ClientEu = s3ClientEu;
-    }
 
     @Value("${saayam.s3.buckets.euPrivate}")
     private String euBucket;
@@ -49,85 +39,30 @@ public class ProfileImageStorageService {
     @Value("${saayam.s3.keyPattern:users/%s/profile.jpg}")
     private String keyPattern;
 
-    // Local memory cache
     private final Map<String, String> keyByUser = new ConcurrentHashMap<>();
 
-    /** Delete object from S3 + clear DB + clear cache. */
-    public void delete(String userId, String regionHint) {
-        if (!userService.userExists(userId)) {
-            throw new org.sfa.volunteer.exception.UserNotFoundException(userId);
-        }
-
-        var uriOpt = userService.getProfilePicturePath(userId);
-        if (uriOpt.isEmpty()) {
-            keyByUser.remove(userId);
-            return;
-        }
-
-        var uri = java.net.URI.create(uriOpt.get());
-        String ssp = uri.getSchemeSpecificPart();
-        if (ssp.startsWith("//")) {
-            ssp = ssp.substring(2);
-        }
-
-        int slash = ssp.indexOf('/');
-        if (slash <= 0) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Invalid profile picture URI for user " + userId
-            );
-        }
-
-        String bucket = ssp.substring(0, slash);
-        String key    = ssp.substring(slash + 1);
-
-        // Resolve effective region
-        String effectiveRegion = regionHint;
-        if (effectiveRegion == null || effectiveRegion.isBlank()) {
-            if (bucket.equals(euBucket)) {
-                effectiveRegion = "eu-west-1";
-            } else {
-                effectiveRegion = "us-east-1";
-            }
-        }
-
-        // Delete from S3
-        try {
-            pickClient(effectiveRegion).deleteObject(
-                    DeleteObjectRequest.builder()
-                            .bucket(bucket)
-                            .key(key)
-                            .build()
-            );
-        } catch (software.amazon.awssdk.services.s3.model.S3Exception e) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Failed to delete profile image from S3",
-                    e
-            );
-        }
-
-        keyByUser.remove(userId);
-        userService.setProfilePicturePath(userId, null);
+    public ProfileImageStorageService(
+            UserService userService,
+            @Qualifier("s3ClientUs") S3Client s3ClientUs,
+            @Qualifier("s3ClientEu") S3Client s3ClientEu
+    ) {
+        this.userService = userService;
+        this.s3ClientUs = s3ClientUs;
+        this.s3ClientEu = s3ClientEu;
     }
 
-    // --------------- Upload (Base64 JSON) ---------------
-
     public Map<String, Object> uploadBase64(String userId, String contentType, String base64, String regionHint) {
-
         if (!userService.userExists(userId)) {
             throw new org.sfa.volunteer.exception.UserNotFoundException(userId);
         }
-
+        if (contentType == null || contentType.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "contentType is required");
+        }
         if (base64 == null || base64.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "base64 is required");
         }
 
-        String cleaned = base64;
-        int comma = base64.indexOf(',');
-        if (comma > 0 && base64.substring(0, comma).contains("base64")) {
-            cleaned = base64.substring(comma + 1);
-        }
+        String cleaned = stripDataUrlPrefix(base64);
 
         byte[] bytes;
         try {
@@ -136,15 +71,11 @@ public class ProfileImageStorageService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid base64");
         }
 
-        long contentLength = bytes.length;
+        validate(contentType, bytes.length);
 
-        validate(contentType, contentLength);
-
-        // bucket + key
         String bucket = pickBucket(regionHint);
-        String key = buildKey(userId, contentType);
+        String key = buildKey(userId);
 
-        // Upload to S3
         try {
             pickClient(regionHint).putObject(
                     PutObjectRequest.builder()
@@ -156,18 +87,11 @@ public class ProfileImageStorageService {
                     RequestBody.fromBytes(bytes)
             );
         } catch (software.amazon.awssdk.services.s3.model.S3Exception e) {
-            throw new ResponseStatusException(
-                    HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Failed to upload to S3",
-                    e
-            );
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to upload to S3", e);
         }
 
-        // Save S3 URI in DB
         String s3Uri = "s3://" + bucket + "/" + key;
         userService.setProfilePicturePath(userId, s3Uri);
-
-        // Cache
         keyByUser.put(userId, key);
 
         return Map.of(
@@ -179,17 +103,15 @@ public class ProfileImageStorageService {
         );
     }
 
-// --------------- View  ---------------
-
-    public Map<String, Object> download(String userId, String regionHint) {
-
+    public void delete(String userId, String regionHint) {
         if (!userService.userExists(userId)) {
             throw new org.sfa.volunteer.exception.UserNotFoundException(userId);
         }
 
         var uriOpt = userService.getProfilePicturePath(userId);
         if (uriOpt.isEmpty()) {
-            return Map.of("found", false);
+            keyByUser.remove(userId);
+            return;
         }
 
         URI uri = URI.create(uriOpt.get());
@@ -210,97 +132,87 @@ public class ProfileImageStorageService {
         }
 
         try {
-            ResponseBytes<GetObjectResponse> obj = pickClient(effectiveRegion)
-                    .getObjectAsBytes(GetObjectRequest.builder().bucket(bucket).key(key).build());
-
-            String contentType = obj.response().contentType();
-            byte[] bytes = obj.asByteArray();
-
-            return Map.of(
-                    "found", true,
-                    "contentType", contentType == null ? "application/octet-stream" : contentType,
-                    "bytes", bytes
+            pickClient(effectiveRegion).deleteObject(
+                    DeleteObjectRequest.builder().bucket(bucket).key(key).build()
             );
-
         } catch (software.amazon.awssdk.services.s3.model.S3Exception e) {
-            // If missing or forbidden, treat as not found
-            return Map.of("found", false);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to delete from S3", e);
         }
+
+        keyByUser.remove(userId);
+        userService.setProfilePicturePath(userId, null);
     }
 
-    public Map<String, Object> downloadBase64(String userId, String regionHint) {
+    public Optional<DownloadedImage> download(String userId, String regionHint) {
+
         if (!userService.userExists(userId)) {
             throw new org.sfa.volunteer.exception.UserNotFoundException(userId);
         }
 
         var uriOpt = userService.getProfilePicturePath(userId);
-        if (uriOpt.isEmpty()) {
-            return Map.of(); // means “no image”
-        }
+        if (uriOpt.isEmpty()) return Optional.empty();
 
-        var uri = java.net.URI.create(uriOpt.get());
+        URI uri = URI.create(uriOpt.get());
         String ssp = uri.getSchemeSpecificPart();
         if (ssp.startsWith("//")) ssp = ssp.substring(2);
 
         int slash = ssp.indexOf('/');
-        if (slash <= 0) return Map.of();
+        if (slash <= 0) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Invalid profile picture URI");
+        }
 
         String bucket = ssp.substring(0, slash);
         String key = ssp.substring(slash + 1);
 
-        String effectiveRegion = regionHint;
-        if (effectiveRegion == null || effectiveRegion.isBlank()) {
-            if (bucket.equals(euBucket)) effectiveRegion = "eu-west-1";
-            else effectiveRegion = "us-east-1";
+        String effectiveRegion = (regionHint == null || regionHint.isBlank())
+                ? (bucket.equals(euBucket) ? "eu-west-1" : "us-east-1")
+                : regionHint;
+
+        try {
+            ResponseBytes<GetObjectResponse> obj = pickClient(effectiveRegion)
+                    .getObjectAsBytes(GetObjectRequest.builder().bucket(bucket).key(key).build());
+
+            String contentType = obj.response().contentType();
+            if (contentType == null || contentType.isBlank()) contentType = "application/octet-stream";
+
+            return Optional.of(new DownloadedImage(contentType, obj.asByteArray()));
+
+        } catch (software.amazon.awssdk.services.s3.model.S3Exception e) {
+            return Optional.empty();
         }
-
-        byte[] bytes;
-        try (var in = pickClient(effectiveRegion).getObject(
-                software.amazon.awssdk.services.s3.model.GetObjectRequest.builder()
-                        .bucket(bucket)
-                        .key(key)
-                        .build()
-        )) {
-            bytes = in.readAllBytes();
-        } catch (Exception e) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Failed to read image from S3", e
-            );
-        }
-
-        String base64 = java.util.Base64.getEncoder().encodeToString(bytes);
-
-        return Map.of(
-                "userId", userId,
-                "bucket", bucket,
-                "key", key,
-                "s3Uri", "s3://" + bucket + "/" + key,
-                "contentType", "image/jpeg",
-                "base64", base64
-        );
     }
 
-    // helper
+    public record DownloadedImage(String contentType, byte[] bytes) {}
+
+    // ---------------- helpers ----------------
+
+    private String stripDataUrlPrefix(String base64) {
+        int comma = base64.indexOf(',');
+        if (comma > 0 && base64.substring(0, comma).contains("base64")) {
+            return base64.substring(comma + 1);
+        }
+        return base64;
+    }
+
     private void validate(String mime, long size) {
         String m = Optional.ofNullable(mime).orElse("").trim();
         int semi = m.indexOf(';');
         if (semi > -1) m = m.substring(0, semi).trim();
 
-        var allowed = Arrays.asList(allowedMimeCsv.split(","));
+        List<String> allowed = Arrays.asList(allowedMimeCsv.split(","));
         if (!allowed.contains(m)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Unsupported image type. Allowed: " + String.join(", ", allowed) + ".");
+                    "Unsupported image type. Allowed: " + String.join(", ", allowed));
         }
         if (size <= 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Empty file.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Empty file");
         }
         if (size > maxBytes) {
-            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Max upload size is 5 MB.");
+            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Max upload size is 5 MB");
         }
     }
 
-    private String buildKey(String userId, String mime) {
+    private String buildKey(String userId) {
         return String.format(keyPattern, userId);
     }
 
@@ -311,7 +223,7 @@ public class ProfileImageStorageService {
     private String pickBucket(String regionHint) {
         String bucket = isEu(regionHint) ? euBucket : usBucket;
         if (bucket == null || bucket.isBlank()) {
-            throw new IllegalStateException("S3 bucket config missing. Check saayam.s3.buckets.* in application.properties");
+            throw new IllegalStateException("S3 bucket config missing: saayam.s3.buckets.*");
         }
         return bucket;
     }

@@ -111,49 +111,84 @@ public class UserController {
         String r = req.getHeader(HDR_REGION);
         return (r == null || r.isBlank()) ? "us-east-1" : r;
     }
-    // 1) GET view URL for a given userId
-    @GetMapping("/{userId}/profile-image")
-    public ResponseEntity<?> getProfileImage(@PathVariable String userId, HttpServletRequest req) {
 
-        var out = profileImageStorageService.download(userId, regionHint(req));
+    private static final String HDR_CALLER_USER_ID = "X-Caller-UserId";
+    private static final String HDR_CALLER_GROUPS  = "X-Caller-Groups"; // "admins,superadmins"
 
-        boolean found = (boolean) out.get("found");
-        if (!found) {return ResponseEntity.noContent().build();}
+    private void authorize(HttpServletRequest req, String targetUserId) {
+        String callerUserId = req.getHeader(HDR_CALLER_USER_ID);
+        String groups = req.getHeader(HDR_CALLER_GROUPS);
 
-        String contentType = (String) out.get("contentType");
-        byte[] bytes = (byte[]) out.get("bytes");
+        if (callerUserId == null || callerUserId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing caller identity");
+        }
 
-        return ResponseEntity.ok()
-                .header("Content-Type", contentType)
-                .body(bytes);
+        if (callerUserId.equals(targetUserId)) return;
+
+        boolean isAdmin = groups != null && (groups.toLowerCase().contains("admins") ||
+                                groups.toLowerCase().contains("superadmins"));
+
+        if (!isAdmin) {throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Not allowed to modify another user's profile image");}
     }
-    // Upload profile image (Base64)
-    @PostMapping("/{userId}/profile-image")
-    public SaayamResponse<Map<String, Object>> uploadProfileImage(
-            @PathVariable String userId,
-            @RequestBody Map<String, Object> body,
-            HttpServletRequest req) {
 
-        String contentType = (String) body.get("contentType");
-        String base64 = (String) body.get("base64");
+    // 1) UPLOAD (Base64)
+    @PostMapping("/profile-image")
+    public SaayamResponse<Map<String, Object>> uploadProfileImage(@RequestBody Map<String, String> body, HttpServletRequest req) {
 
-        if (contentType == null || contentType.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "contentType is required");
+        String userId = body.get("userId");
+        String contentType = body.get("contentType");
+        String base64 = body.get("base64");
+
+        if (userId == null || userId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "userId is required");
         }
 
-        if (base64 == null || base64.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "base64 is required");
-        }
+        authorize(req, userId);
 
-        var payload = profileImageStorageService.uploadBase64(userId, contentType, base64, regionHint(req));
+        var payload = profileImageStorageService.uploadBase64(
+                userId, contentType, base64, regionHint(req)
+        );
 
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, payload);
     }
-    // 3) DELETE image for a given userId
-    @DeleteMapping("/{userId}/profile-image")
-    public SaayamResponse<Map<String, String>> deleteProfileImage(@PathVariable String userId, HttpServletRequest req) {
+
+    // 2) VIEW
+    @PostMapping("/profile-image/view")
+    public ResponseEntity<byte[]> viewProfileImage(@RequestBody Map<String, String> body, HttpServletRequest req) {
+
+        String userId = body.get("userId");
+        if (userId == null || userId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "userId is required");
+        }
+
+        var imgOpt = profileImageStorageService.download(userId, regionHint(req));
+        if (imgOpt.isEmpty()) {
+            return ResponseEntity.noContent().build();
+        }
+
+        var img = imgOpt.get();
+        return ResponseEntity.ok()
+                .header("Content-Type", img.contentType())
+                .body(img.bytes());
+    }
+
+    // 3) DELETE
+    @DeleteMapping("/profile-image")
+    public SaayamResponse<Map<String, String>> deleteProfileImage(@RequestBody Map<String, String> body, HttpServletRequest req) {
+
+        String userId = body.get("userId");
+        if (userId == null || userId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "userId is required");
+        }
+
+        authorize(req, userId);
+
         profileImageStorageService.delete(userId, regionHint(req));
+
         return responseBuilder.buildSuccessResponse(
-                SaayamStatusCode.SUCCESS, Map.of("userId", userId, "message", "Profile image deleted"));
+                SaayamStatusCode.SUCCESS,
+                Map.of("userId", userId, "message", "Profile image deleted")
+        );
     }
 }
