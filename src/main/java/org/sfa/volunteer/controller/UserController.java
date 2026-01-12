@@ -151,11 +151,12 @@ public class UserController {
         return responseBuilder.buildSuccessResponse(
                 SaayamStatusCode.SUCCESS, Map.of("userId", userId, "message", "Profile image deleted"));
     }
-    @DeleteMapping("/profile/signoff/{userId}")
+
+    @DeleteMapping("/profile/signoff")
     public SaayamResponse<SignOffResponse> signOffUser(
-            @PathVariable String userId,
-            @RequestBody(required = false) SignOffRequest request) {
-        String reason = (request != null ? request.reason() : null);
+            @Valid @RequestBody SignOffRequest request) {
+        String userId = request.userId();
+        String reason = request.reason();
         profileImageStorageService.delete(userId, "us-east-1");
         SignOffResponse response = userService.signOffUser(userId, reason);
         return responseBuilder.buildSuccessResponse(
@@ -164,4 +165,5 @@ public class UserController {
                 response
         );
     }
+
 }

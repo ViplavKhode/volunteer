@@ -43,59 +43,80 @@ public class SignOffUserHandler implements RequestHandler<APIGatewayProxyRequest
         APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
 
         try {
+            // Language handling
             String lang = Optional.ofNullable(requestEvent.getHeaders())
-                    .map(headers -> headers.getOrDefault("Accept-Language", "en"))
+                    .map(h -> h.getOrDefault("Accept-Language", "en"))
                     .orElse("en");
             Locale locale = Locale.forLanguageTag(lang);
 
-            String userId = Optional.ofNullable(requestEvent.getPathParameters())
-                    .map(params -> params.get("userId"))
-                    .orElseThrow(() -> new IllegalArgumentException("userId path parameter is missing"));
-
-            // Parse optional body for reason
-            SignOffRequest signOffRequest = null;
-            if (requestEvent.getBody() != null && !requestEvent.getBody().isEmpty()) {
-                Map<String, Object> body = parseBody(requestEvent.getBody());
-                signOffRequest = parseRequest(body);
+            // Body is required
+            if (requestEvent.getBody() == null || requestEvent.getBody().isBlank()) {
+                throw new IllegalArgumentException("Request body is required");
             }
 
-            // Delete profile image from S3
+            // Deserialize body directly into DTO
+            SignOffRequest signOffRequest =
+                    objectMapper.readValue(requestEvent.getBody(), SignOffRequest.class);
+
+            // userId validation (mandatory)
+            if (signOffRequest.userId() == null || signOffRequest.userId().isBlank()) {
+                throw new IllegalArgumentException("userId is required");
+            }
+
+            String userId = signOffRequest.userId();
+            String reason = signOffRequest.reason(); // optional
+
+            // Delete profile image
             profileImageStorageService.delete(userId, "us-east-1");
 
             // Sign off user
-            String reason = (signOffRequest != null ? signOffRequest.reason() : null);
-            SignOffResponse signOffResponse = userService.signOffUser(userId, reason);
+            SignOffResponse signOffResponse =
+                    userService.signOffUser(userId, reason);
 
-            SaayamResponse<SignOffResponse> successResponse = responseBuilder.buildSuccessResponse(
-                    SaayamStatusCode.USER_DELETED,
-                    new Object[]{userId},
-                    signOffResponse
-            );
+            // Build success response
+            SaayamResponse<SignOffResponse> successResponse =
+                    responseBuilder.buildSuccessResponse(
+                            SaayamStatusCode.USER_DELETED,
+                            new Object[]{userId},
+                            signOffResponse
+                    );
 
-            String responseBody = objectMapper.writeValueAsString(successResponse);
-            response.setBody(responseBody);
+            response.setBody(objectMapper.writeValueAsString(successResponse));
             response.setStatusCode(200);
+
+        } catch (IllegalArgumentException e) {
+            context.getLogger().log("Validation error: " + e.getMessage());
+
+            SaayamResponse<Void> errorResponse =
+                    responseBuilder.buildErrorResponse(
+                            400,
+                            SaayamStatusCode.BAD_REQUEST,
+                            e.getMessage()
+                    );
+
+            try {
+                response.setBody(objectMapper.writeValueAsString(errorResponse));
+            } catch (Exception ex) {
+                response.setBody("{\"message\":\"Invalid request\"}");
+            }
+
+            response.setStatusCode(400);
 
         } catch (Exception e) {
             context.getLogger().log("Error processing sign-off request: " + e.getMessage());
             e.printStackTrace();
 
-            String lang = Optional.ofNullable(requestEvent.getHeaders())
-                    .map(headers -> headers.getOrDefault("Accept-Language", "en"))
-                    .orElse("en");
-            Locale locale = Locale.forLanguageTag(lang);
-            String errorMessage = messageSourceUtil.getMessage(SaayamStatusCode.INTERNAL_SERVER_ERROR.getCode(), null);
-
-            SaayamResponse<Void> errorResponse = responseBuilder.buildErrorResponse(
-                    500,
-                    SaayamStatusCode.INTERNAL_SERVER_ERROR,
-                    errorMessage
-            );
+            SaayamResponse<Void> errorResponse =
+                    responseBuilder.buildErrorResponse(
+                            500,
+                            SaayamStatusCode.INTERNAL_SERVER_ERROR,
+                            messageSourceUtil.getMessage(
+                                    SaayamStatusCode.INTERNAL_SERVER_ERROR.getCode(), null)
+                    );
 
             try {
-                String responseBody = objectMapper.writeValueAsString(errorResponse);
-                response.setBody(responseBody);
-            } catch (Exception jsonException) {
+                response.setBody(objectMapper.writeValueAsString(errorResponse));
+            } catch (Exception ex) {
                 response.setBody("{\"message\":\"Failed to serialize error response\"}");
             }
 
@@ -105,15 +126,4 @@ public class SignOffUserHandler implements RequestHandler<APIGatewayProxyRequest
         return response;
     }
 
-    private SignOffRequest parseRequest(Map<String, Object> body) {
-        return objectMapper.convertValue(body, SignOffRequest.class);
-    }
-
-    private Map<String, Object> parseBody(String body) {
-        try {
-            return objectMapper.readValue(body, Map.class);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to parse request body", e);
-        }
-    }
 }
