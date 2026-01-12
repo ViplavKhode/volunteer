@@ -13,7 +13,7 @@ import org.sfa.volunteer.service.ProfileImageStorageService;
 import java.util.HashMap;
 import java.util.Map;
 
-public class DeleteProfileImageHandler implements RequestHandler<Map<String, Object>, Map<String, Object>> {
+public class UploadProfileImageHandler implements RequestHandler<Map<String, Object>, Map<String, Object>> {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -35,17 +35,20 @@ public class DeleteProfileImageHandler implements RequestHandler<Map<String, Obj
 
             String bodyJson = asString(event.get("body"));
             Map<String, Object> body = MAPPER.readValue(bodyJson, new TypeReference<>() {});
-            String userId = asString(body.get("userId"));
 
-            if (isBlank(userId)) {
-                return apiError(400, "userId is required");
+            String userId = asString(body.get("userId"));
+            String contentType = asString(body.get("contentType"));
+            String base64 = asString(body.get("base64"));
+
+            if (isBlank(userId) || isBlank(contentType) || isBlank(base64)) {
+                return apiError(400, "userId, contentType, base64 are required");
             }
 
-            storage.delete(userId, region);
+            Map<String, Object> result = storage.uploadBase64(userId, contentType, base64, region);
 
             return apiJson(200, Map.of(
-                    "message", "Profile image deleted",
-                    "userId", userId
+                    "message", "Profile image uploaded",
+                    "data", result
             ));
 
         } catch (Exception e) {

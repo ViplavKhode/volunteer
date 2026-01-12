@@ -29,18 +29,4 @@ public class S3Config {
                         .build())
                 .build();
     }
-
-    @Bean("s3PresignerUs")
-    public S3Presigner s3PresignerUs() {
-        return S3Presigner.builder()
-                .region(Region.US_EAST_1)
-                .build();
-    }
-
-    @Bean("s3PresignerEu")
-    public S3Presigner s3PresignerEu() {
-        return S3Presigner.builder()
-                .region(Region.EU_WEST_1)
-                .build();
-    }
 }

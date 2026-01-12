@@ -10,10 +10,11 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.sfa.volunteer.VolunteerApplication;
 import org.sfa.volunteer.service.ProfileImageStorageService;
 
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 
-public class DeleteProfileImageHandler implements RequestHandler<Map<String, Object>, Map<String, Object>> {
+public class ViewProfileImageHandler implements RequestHandler<Map<String, Object>, Map<String, Object>> {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -41,12 +42,22 @@ public class DeleteProfileImageHandler implements RequestHandler<Map<String, Obj
                 return apiError(400, "userId is required");
             }
 
-            storage.delete(userId, region);
+            var imgOpt = storage.download(userId, region); // Optional<DownloadedImage>
+            if (imgOpt.isEmpty()) {
+                return apiNoContent();
+            }
 
-            return apiJson(200, Map.of(
-                    "message", "Profile image deleted",
-                    "userId", userId
+            var img = imgOpt.get();
+            String base64Body = Base64.getEncoder().encodeToString(img.bytes());
+
+            Map<String, Object> resp = new HashMap<>();
+            resp.put("statusCode", 200);
+            resp.put("headers", Map.of(
+                    "Content-Type", img.contentType()
             ));
+            resp.put("isBase64Encoded", true);
+            resp.put("body", base64Body);
+            return resp;
 
         } catch (Exception e) {
             return apiError(500, safeMsg(e));
@@ -54,6 +65,15 @@ public class DeleteProfileImageHandler implements RequestHandler<Map<String, Obj
     }
 
     // ---------- helpers ----------
+    private static Map<String, Object> apiNoContent() {
+        Map<String, Object> resp = new HashMap<>();
+        resp.put("statusCode", 204);
+        resp.put("headers", Map.of());
+        resp.put("isBase64Encoded", false);
+        resp.put("body", "");
+        return resp;
+    }
+
     private static String header(Map<String, Object> event, String name, String def) {
         Object headersObj = event.get("headers");
         if (!(headersObj instanceof Map)) return def;
@@ -70,18 +90,14 @@ public class DeleteProfileImageHandler implements RequestHandler<Map<String, Obj
         return def;
     }
 
-    private static Map<String, Object> apiJson(int status, Object payload) throws Exception {
-        Map<String, Object> resp = new HashMap<>();
-        resp.put("statusCode", status);
-        resp.put("headers", Map.of("Content-Type", "application/json"));
-        resp.put("isBase64Encoded", false);
-        resp.put("body", MAPPER.writeValueAsString(payload));
-        return resp;
-    }
-
     private static Map<String, Object> apiError(int status, String msg) {
         try {
-            return apiJson(status, Map.of("message", msg));
+            Map<String, Object> resp = new HashMap<>();
+            resp.put("statusCode", status);
+            resp.put("headers", Map.of("Content-Type", "application/json"));
+            resp.put("isBase64Encoded", false);
+            resp.put("body", MAPPER.writeValueAsString(Map.of("message", msg)));
+            return resp;
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("statusCode", status);
