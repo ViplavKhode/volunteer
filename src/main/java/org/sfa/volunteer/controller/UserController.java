@@ -19,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Base64;
 import java.util.Map;
 
 @RestController
@@ -125,8 +126,8 @@ public class UserController {
 
         if (callerUserId.equals(targetUserId)) return;
 
-        boolean isAdmin = groups != null && (groups.toLowerCase().contains("admins") ||
-                                groups.toLowerCase().contains("superadmins"));
+        String g = (groups == null) ? "" : groups.toLowerCase();
+        boolean isAdmin = g.contains("admin");
 
         if (!isAdmin) {throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Not allowed to modify another user's profile image");}
@@ -155,22 +156,24 @@ public class UserController {
 
     // 2) VIEW
     @PostMapping("/profile-image/view")
-    public ResponseEntity<byte[]> viewProfileImage(@RequestBody Map<String, String> body, HttpServletRequest req) {
-
+    public SaayamResponse<Map<String, Object>> viewProfileImage(@RequestBody Map<String, String> body, HttpServletRequest req) {
         String userId = body.get("userId");
-        if (userId == null || userId.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "userId is required");
-        }
-
+        if (userId == null || userId.isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "userId is required");
+        authorize(req, userId);
         var imgOpt = profileImageStorageService.download(userId, regionHint(req));
         if (imgOpt.isEmpty()) {
-            return ResponseEntity.noContent().build();
+            return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, Map.of("found", false));
         }
 
         var img = imgOpt.get();
-        return ResponseEntity.ok()
-                .header("Content-Type", img.contentType())
-                .body(img.bytes());
+        String base64 = Base64.getEncoder().encodeToString(img.bytes());
+
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, Map.of(
+                "found", true,
+                "userId", userId,
+                "contentType", img.contentType(),
+                "base64", base64
+        ));
     }
 
     // 3) DELETE

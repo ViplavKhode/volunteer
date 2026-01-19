@@ -73,11 +73,12 @@ public class ProfileImageStorageService {
 
         validate(contentType, bytes.length);
 
-        String bucket = pickBucket(regionHint);
+        String effectiveRegion = (regionHint == null || regionHint.isBlank()) ? "us-east-1" : regionHint;
+        String bucket = pickBucket(effectiveRegion);
         String key = buildKey(userId);
 
         try {
-            pickClient(regionHint).putObject(
+            pickClient(effectiveRegion).putObject(
                     PutObjectRequest.builder()
                             .bucket(bucket)
                             .key(key)
