@@ -30,10 +30,6 @@ public record UserProfileResponse(
         String userStatus,
         String userCategory,
         String lastLocation,
-        String gender,
-        String language1,
-        String language2,
-        String language3,
         Integer promotionWizardStage,
         ZonedDateTime promotionWizardLastUpdateDate) {
 }

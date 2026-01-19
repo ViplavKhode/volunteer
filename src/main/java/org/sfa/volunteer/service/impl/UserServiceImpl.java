@@ -8,14 +8,24 @@ import org.sfa.volunteer.dto.response.UserProfileResponse;
 import org.sfa.volunteer.dto.response.VolunteerProfileResponse;
 import org.sfa.volunteer.exception.UserCategoryNotFoundException;
 import org.sfa.volunteer.exception.UserNotFoundException;
-import org.sfa.volunteer.model.Country;
-import org.sfa.volunteer.model.User;
-import org.sfa.volunteer.model.UserCategory;
-import org.sfa.volunteer.model.UserStatus;
+import org.sfa.volunteer.model.entity.Country;
+import org.sfa.volunteer.model.entity.Request;
+import org.sfa.volunteer.model.entity.SkillList;
+import org.sfa.volunteer.model.entity.User;
+import org.sfa.volunteer.model.entity.UserAvailability;
+import org.sfa.volunteer.model.entity.UserCategory;
+import org.sfa.volunteer.model.entity.UserSkills;
+import org.sfa.volunteer.model.entity.UserStatus;
+import org.sfa.volunteer.model.enums.RequestTypeEnum;
+import org.sfa.volunteer.model.enums.SkillLevelEnum;
+import org.sfa.volunteer.model.enums.UserStatusEnum;
 import org.sfa.volunteer.repository.CountryRepository;
+import org.sfa.volunteer.repository.SkillListRepository;
 import org.sfa.volunteer.repository.StateRepository;
 import org.sfa.volunteer.repository.UserCategoryRepository;
+import org.sfa.volunteer.repository.UserAvailabilityRepository;
 import org.sfa.volunteer.repository.UserRepository;
+import org.sfa.volunteer.repository.UserSkillsRepository;
 import org.sfa.volunteer.repository.UserStatusRepository;
 import org.sfa.volunteer.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -198,8 +208,8 @@ public class UserServiceImpl implements UserService {
                 .language3(user.getLanguage3())
                 .stateName(user.getState() != null ? user.getState().getStateName() : null)
                 .countryName(user.getCountry() != null ? user.getCountry().getCountryName() : null)
-                .userStatus(user.getUserStatus() != null ? user.getUserStatus().getUserStatus() : null)
-                .userCategory(user.getUserCategory() != null ? user.getUserCategory().getUserCategory() : null)
+                .userStatus(user.getUserStatus() != null ? user.getUserStatus().getUserStatus().name() : null)
+                .userCategory(user.getUserCategory() != null ? user.getUserCategory().getUserCategory().name() : null)
                 .gender(user.getGender())
                 .lastLocation(user.getLastLocation())
                 .language1(user.getLanguage1())
@@ -207,6 +217,16 @@ public class UserServiceImpl implements UserService {
                 .language3(user.getLanguage3())
                 .promotionWizardStage(user.getVolunteerStage())
                 .promotionWizardLastUpdateDate(user.getVolunteerUpdateDate())
+                .build();
+    }
+
+    private VolunteerProfileResponse mapToVolunteerProfileResponse(User user, int priorityNum) {
+        return VolunteerProfileResponse.builder()
+                .priorityNum(priorityNum)
+                .id(user.getId())
+                .fullName(user.getFullName())
+                .emailAddress(user.getPrimaryEmailAddress())
+                .phoneNumber(user.getPrimaryPhoneNumber())
                 .build();
     }
 

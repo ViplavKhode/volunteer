@@ -8,6 +8,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.sfa.volunteer.model.UserAdditionalDetail;
+import org.sfa.volunteer.model.Volunteer;
 
 import java.time.ZonedDateTime;
 import java.util.Objects;
@@ -90,18 +92,6 @@ public class User {
 
     @Column(name = "last_update_date")
     private ZonedDateTime lastUpdateDate;
-
-    @Column(name = "gender")
-    private String gender;
-
-    @Column(name = "language_1")
-    private String language1;
-
-    @Column(name = "language_2")
-    private String language2;
-
-    @Column(name = "language_3")
-    private String language3;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "state_id")

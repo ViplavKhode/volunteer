@@ -1,7 +1,4 @@
 package org.sfa.volunteer.repository;
-
-import org.sfa.volunteer.model.User;
-import org.sfa.volunteer.model.Volunteer;
 import org.sfa.volunteer.model.VolunteerUserAvailability;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;

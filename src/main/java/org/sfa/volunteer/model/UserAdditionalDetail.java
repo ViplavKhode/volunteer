@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.sfa.volunteer.model.entity.User;
 
 @Entity
 @Table(name = "user_additional_details")
