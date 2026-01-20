@@ -11,6 +11,7 @@ import org.sfa.volunteer.dto.response.PaginationResponse;
 import org.sfa.volunteer.dto.response.SignOffResponse;
 import org.sfa.volunteer.dto.response.UserProfileResponse;
 import org.sfa.volunteer.dto.response.WizardStatusResponse;
+import org.sfa.volunteer.exception.CountryNotFoundException;
 import org.sfa.volunteer.exception.UserCategoryNotFoundException;
 import org.sfa.volunteer.exception.UserNotFoundException;
 import org.sfa.volunteer.exception.UserOrganizationNotFoundException;
@@ -62,6 +63,8 @@ public class UserServiceImpl implements UserService {
     private static final Integer DEFAULT_USER_STATUS_ID = 1; // Active user
     private static final Integer DEFAULT_USER_CATEGORY_ID = 1; // User Category: common user
     private static final Integer VOLUNTEER_CATEGORY_ID = 2; // User Category: volunteer
+    private static final String DEFAULT_TIMEZONE = "UTC";
+    private static final String DEFAULT_LOCALE = "en_US";
 
     @Autowired
     public UserServiceImpl(
@@ -92,14 +95,25 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new UserCategoryNotFoundException(DEFAULT_USER_CATEGORY_ID));
 
         Country country = countryRepository.findByCountryName(request.country())
-                .orElseThrow(() -> new UserCategoryNotFoundException(DEFAULT_USER_CATEGORY_ID));
+                .orElseThrow(() -> new CountryNotFoundException(request.country()));
+
+
+        String timeZone =
+                (request.timeZone() != null && !request.timeZone().isBlank())
+                        ? request.timeZone()
+                        : DEFAULT_TIMEZONE;
+
+        String locale =
+                (request.locale() != null && !request.locale().isBlank())
+                        ? request.locale()
+                        : DEFAULT_LOCALE;
 
         // Create a new User entity from the request data
         User user = User.builder()
                 .fullName(request.name())
                 .primaryEmailAddress(request.email())
                 .primaryPhoneNumber(request.phoneNumber())
-                .timeZone(request.timeZone())
+                .timeZone(timeZone)
                 .lastUpdateDate(ZonedDateTime.now(ZoneId.of("UTC")))
                 .userCategory(userCategory)
                 .userStatus(userStatus)
