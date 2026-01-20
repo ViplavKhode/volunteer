@@ -160,12 +160,14 @@ public class UserController {
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, payload);
     }
 
-    // 2) VIEW
+    // 2) VIEW (Base64 JSON)
     @PostMapping("/profile-image/view")
     public SaayamResponse<Map<String, Object>> viewProfileImage(@RequestBody Map<String, String> body, HttpServletRequest req) {
         String userId = body.get("userId");
-        if (userId == null || userId.isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "userId is required");
-        authorize(req, userId);
+        if (userId == null || userId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "userId is required");
+        }
+
         var imgOpt = profileImageStorageService.download(userId, regionHint(req));
         if (imgOpt.isEmpty()) {
             return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, Map.of("found", false));
