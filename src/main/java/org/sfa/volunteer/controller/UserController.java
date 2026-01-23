@@ -129,8 +129,10 @@ public class UserController {
         String g = (groups == null) ? "" : groups.toLowerCase();
         boolean isAdmin = g.contains("admin");
 
-        if (!isAdmin) {throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Not allowed to modify another user's profile image");}
+        if (!isAdmin) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Not allowed to modify another user's profile image");
+        }
     }
 
     // 1) UPLOAD (Base64)

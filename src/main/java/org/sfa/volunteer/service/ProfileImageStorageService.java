@@ -1,5 +1,6 @@
 package org.sfa.volunteer.service;
 
+import org.sfa.volunteer.exception.UserNotFoundException;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -8,10 +9,7 @@ import org.springframework.web.server.ResponseStatusException;
 import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
-import software.amazon.awssdk.services.s3.model.GetObjectRequest;
-import software.amazon.awssdk.services.s3.model.GetObjectResponse;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.*;
 
 import java.net.URI;
 import java.util.*;
@@ -105,42 +103,54 @@ public class ProfileImageStorageService {
     }
 
     public void delete(String userId, String regionHint) {
+
         if (!userService.userExists(userId)) {
             throw new org.sfa.volunteer.exception.UserNotFoundException(userId);
         }
 
         var uriOpt = userService.getProfilePicturePath(userId);
-        if (uriOpt.isEmpty()) {
-            keyByUser.remove(userId);
+        if (uriOpt.isPresent()) {
+            URI uri = URI.create(uriOpt.get());
+            String ssp = uri.getSchemeSpecificPart();
+            if (ssp.startsWith("//")) ssp = ssp.substring(2);
+
+            int slash = ssp.indexOf('/');
+            if (slash <= 0) {
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Invalid profile picture URI");
+            }
+
+            String bucket = ssp.substring(0, slash);
+            String key = ssp.substring(slash + 1);
+
+            String effectiveRegion = (regionHint == null || regionHint.isBlank())
+                    ? (bucket.equals(euBucket) ? "eu-west-1" : "us-east-1")
+                    : regionHint;
+
+            try {
+                pickClient(effectiveRegion).deleteObject(
+                        DeleteObjectRequest.builder().bucket(bucket).key(key).build()
+                );
+            } catch (software.amazon.awssdk.services.s3.model.S3Exception e) {
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to delete profile image", e);
+            }
+
+            userService.setProfilePicturePath(userId, null);
             return;
         }
 
-        URI uri = URI.create(uriOpt.get());
-        String ssp = uri.getSchemeSpecificPart();
-        if (ssp.startsWith("//")) ssp = ssp.substring(2);
-
-        int slash = ssp.indexOf('/');
-        if (slash <= 0) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Invalid profile picture URI");
-        }
-
-        String bucket = ssp.substring(0, slash);
-        String key = ssp.substring(slash + 1);
-
-        String effectiveRegion = regionHint;
-        if (effectiveRegion == null || effectiveRegion.isBlank()) {
-            effectiveRegion = bucket.equals(euBucket) ? "eu-west-1" : "us-east-1";
-        }
+        // Fallback
+        String effectiveRegion = (regionHint == null || regionHint.isBlank()) ? "us-east-1" : regionHint;
+        String bucket = pickBucket(effectiveRegion);
+        String key = buildKey(userId);
 
         try {
             pickClient(effectiveRegion).deleteObject(
                     DeleteObjectRequest.builder().bucket(bucket).key(key).build()
             );
         } catch (software.amazon.awssdk.services.s3.model.S3Exception e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to delete from S3", e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to delete profile image", e);
         }
 
-        keyByUser.remove(userId);
         userService.setProfilePicturePath(userId, null);
     }
 
@@ -209,7 +219,8 @@ public class ProfileImageStorageService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Empty file");
         }
         if (size > maxBytes) {
-            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Max upload size is 5 MB");
+            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,
+                    "Max upload size is " + (maxBytes / (1024 * 1024)) + " MB");
         }
     }
 
