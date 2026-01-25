@@ -13,7 +13,7 @@ public record VolunteerResponse(
         ZonedDateTime tcUpdateDate,
         String govtIdFilename,
         ZonedDateTime govtUpdateDate,
-        String skills,
+        List<String> skills,
         Boolean notification,
         Boolean isCompleted,
         ZonedDateTime completedDate,

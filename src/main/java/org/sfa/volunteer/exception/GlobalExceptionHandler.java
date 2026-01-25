@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.http.ResponseEntity;
+import java.util.Locale;
 
 @ControllerAdvice
 @Slf4j
@@ -18,6 +20,7 @@ public class GlobalExceptionHandler {
 
     private final MessageSourceUtil messageSourceUtil;
     private final ResponseBuilder responseBuilder;
+
 
     @Autowired
     public GlobalExceptionHandler(MessageSourceUtil messageSourceUtil, ResponseBuilder responseBuilder) {
@@ -76,7 +79,44 @@ public class GlobalExceptionHandler {
         return responseBuilder.buildErrorResponse(HttpStatus.NOT_FOUND.value(), status , errorMessage);
     }
 
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<SaayamResponse<Void>> handleForbiddenException(ForbiddenException ex, Locale locale) {
+        String message = messageSourceUtil.getMessage("error.forbidden", new Object[]{ex.getMessage()});
+        log.warn("Forbidden access: {}", ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(
+                SaayamResponse.error(
+                        HttpStatus.FORBIDDEN.value(),
+                        SaayamStatusCode.FORBIDDEN,
+                        message
+                )
+        );
+    }
 
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<SaayamResponse<Void>> handleUnauthorizedException(UnauthorizedException ex, Locale locale) {
+        String message = messageSourceUtil.getMessage("error.unauthorized", new Object[]{ex.getMessage()});
+        log.warn("Unauthorized access: {}", ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
+                SaayamResponse.error(
+                        HttpStatus.UNAUTHORIZED.value(),
+                        SaayamStatusCode.UNAUTHORIZED,
+                        message
+                )
+        );
+    }
+
+    @ExceptionHandler(NotFoundException.class)
+    public ResponseEntity<SaayamResponse<Void>> handleNotFoundException(NotFoundException ex, Locale locale) {
+        String message = ex.getMessage();
+        log.warn("Request not found: {}", message);
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(
+                SaayamResponse.error(
+                        HttpStatus.NOT_FOUND.value(),
+                        SaayamStatusCode.VOLUNTEER_NOT_FOUND,
+                        message
+                )
+        );
+    }
 //    @ExceptionHandler(Exception.class)
 //    @ResponseBody
 //    public <T> SaayamResponse<T> handleGeneralException(Exception exception, WebRequest request) {

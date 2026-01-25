@@ -1,0 +1,17 @@
+﻿[INFO] Scanning for projects...
+[INFO] 
+[INFO] ------------------------< com.saayam:volunteer >------------------------
+[INFO] Building volunteer 0.0.1-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- clean:3.2.0:clean (default-clean) @ volunteer ---
+[INFO] Deleting G:\volunt\volunteer\target
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ volunteer ---
+[INFO] Copying 1 resource from src\main\resources to target\classes
+[INFO] Copying 4 resources from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.11.0:compile (default-compile) @ volunteer ---
+[INFO] Changes detected - recompiling the module! :source
+[INFO] Compiling 72 source files with javac [debug release 17] to target\classes

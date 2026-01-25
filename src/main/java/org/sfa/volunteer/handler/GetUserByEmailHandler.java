@@ -1,54 +1,42 @@
 package org.sfa.volunteer.handler;
 
 import com.amazonaws.services.lambda.runtime.Context;
-import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
+import lombok.extern.slf4j.Slf4j;
 import org.sfa.volunteer.VolunteerApplication;
 import org.sfa.volunteer.dto.common.SaayamResponse;
 import org.sfa.volunteer.dto.common.SaayamStatusCode;
+import org.sfa.volunteer.dto.request.CreateUserRequest;
 import org.sfa.volunteer.dto.request.FindUserProfileUsingEmail;
 import org.sfa.volunteer.dto.response.UserProfileResponse;
+import org.sfa.volunteer.dto.response.VolunteerResponse;
+import org.sfa.volunteer.exception.EnumUnspecifiedException;
+import org.sfa.volunteer.exception.InvalidRequestException;
+import org.sfa.volunteer.exception.LambdaExceptionHandler;
 import org.sfa.volunteer.service.UserService;
+import org.sfa.volunteer.service.VolunteerService;
 import org.sfa.volunteer.util.MessageSourceUtil;
 import org.sfa.volunteer.util.ResponseBuilder;
 import org.springframework.boot.SpringApplication;
 import org.springframework.context.ApplicationContext;
+import org.springframework.http.HttpStatus;
 
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
-public class GetUserByEmailHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
+@Slf4j
+public class GetUserByEmailHandler  extends BaseRequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
 
-    private static final UserService userService;
-    private static final ObjectMapper objectMapper = new ObjectMapper()
-            .registerModule(new JavaTimeModule())
-            .enable(SerializationFeature.INDENT_OUTPUT); // Enable pretty printing for better readability
-    private static final ResponseBuilder responseBuilder;
-    private static final MessageSourceUtil messageSourceUtil;
-
-    static {
-        ApplicationContext context = SpringApplication.run(VolunteerApplication.class);
-        userService = context.getBean(UserService.class);
-        responseBuilder = context.getBean(ResponseBuilder.class);
-        messageSourceUtil = context.getBean(MessageSourceUtil.class);
-    }
+    private static final UserService userService = context.getBean(UserService.class);
+    private static final ResponseBuilder responseBuilder = context.getBean(ResponseBuilder.class);
 
     @Override
-    public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent requestEvent, Context context) {
-        APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
-
+    public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent requestEvent, Context lambdaContext) {
         try {
-//            String lang = requestEvent.getHeaders().getOrDefault("Accept-Language", "en");
-//            Locale locale = Locale.forLanguageTag(lang);
-            String lang = Optional.ofNullable(requestEvent.getHeaders())
-                    .map(headers -> headers.getOrDefault("Accept-Language", "en"))
-                    .orElse("en");
-            Locale locale = Locale.forLanguageTag(lang);
+            log.info("Received create request event: {}", requestEvent);
 
             Map<String, Object> body = parseBody(requestEvent.getBody());
             FindUserProfileUsingEmail request = parseRequest(body);
@@ -61,32 +49,18 @@ public class GetUserByEmailHandler implements RequestHandler<APIGatewayProxyRequ
                     new Object[]{profileByEmail.countryName()},
                     profileByEmail
             );
-
-            String responseBody = objectMapper.writeValueAsString(successResponse);
-            response.setBody(responseBody);
-            response.setStatusCode(201); // Created
+            log.info("Create request successful. Response: {}", successResponse);
+            return createResponse(HttpStatus.CREATED.value(), successResponse);
+        } catch (EnumUnspecifiedException e) {
+            log.warn("EnumUnspecifiedException in CreateRequestHandler: ", e);
+            return createErrorResponse(HttpStatus.BAD_REQUEST.value(), SaayamStatusCode.ENUM_UNSPECIFIED, e.getMessage());
+        } catch (InvalidRequestException e) {
+            log.warn("InvalidRequestException in CreateRequestHandler: ", e);
+            return createErrorResponse(HttpStatus.BAD_REQUEST.value(), SaayamStatusCode.BAD_REQUEST, e.getMessage());
         } catch (Exception e) {
-            String lang = requestEvent.getHeaders().getOrDefault("Accept-Language", "en");
-            Locale locale = Locale.forLanguageTag(lang);
-            String errorMessage = messageSourceUtil.getMessage(SaayamStatusCode.INTERNAL_SERVER_ERROR.getCode(), null);
-
-            SaayamResponse<Void> errorResponse = responseBuilder.buildErrorResponse(
-                    500,
-                    SaayamStatusCode.INTERNAL_SERVER_ERROR,
-                    errorMessage
-            );
-
-            try {
-                String responseBody = objectMapper.writeValueAsString(errorResponse);
-                response.setBody(responseBody);
-            } catch (Exception jsonException) {
-                response.setBody("{\"message\":\"Failed to serialize error response\"}");
-            }
-
-            response.setStatusCode(500); // Internal Server Error
+            log.error("Unexpected error in CreateRequestHandler: ", e);
+            return LambdaExceptionHandler.handleException(e, lambdaContext, getLocaleFromRequest(requestEvent));
         }
-
-        return response;
     }
 
     private FindUserProfileUsingEmail parseRequest(Map<String, Object> body) {
@@ -102,3 +76,17 @@ public class GetUserByEmailHandler implements RequestHandler<APIGatewayProxyRequ
         }
     }
 }
+
+
+//            String lang = requestEvent.getHeaders().getOrDefault("Accept-Language", "en");
+//            Locale locale = Locale.forLanguageTag(lang);
+//            String lang = Optional.ofNullable(requestEvent.getHeaders())
+//                    .map(headers -> headers.getOrDefault("Accept-Language", "en"))
+//                    .orElse("en");
+//            Locale locale = Locale.forLanguageTag(lang);
+
+
+
+
+
+

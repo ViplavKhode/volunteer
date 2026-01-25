@@ -9,20 +9,20 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.extern.slf4j.Slf4j;
 import org.sfa.volunteer.dto.common.SaayamResponse;
 import org.sfa.volunteer.dto.common.SaayamStatusCode;
-import org.sfa.volunteer.dto.request.UpdateUserProfileRequest;
-import org.sfa.volunteer.dto.response.UserProfileResponse;
+import org.sfa.volunteer.dto.request.VolunteerRequest;
+import org.sfa.volunteer.dto.response.VolunteerResponse;
 import org.sfa.volunteer.exception.EnumUnspecifiedException;
 import org.sfa.volunteer.exception.InvalidRequestException;
 import org.sfa.volunteer.exception.LambdaExceptionHandler;
-import org.sfa.volunteer.service.UserService;
+import org.sfa.volunteer.service.VolunteerService;
 import org.sfa.volunteer.util.ResponseBuilder;
 import org.springframework.http.HttpStatus;
 import java.util.Map;
 
 @Slf4j
-public class UpdateUserProfileHandler  extends BaseRequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
+public class UpdateVolunteerStep4Handler extends BaseRequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
 
-    private static final UserService userService = context.getBean(UserService.class);
+    private static final VolunteerService volunteerService = context.getBean(VolunteerService.class);
     private static final ResponseBuilder responseBuilder = context.getBean(ResponseBuilder.class);
     private static final ObjectMapper objectMapper = new ObjectMapper()
             .registerModule(new JavaTimeModule())
@@ -32,52 +32,46 @@ public class UpdateUserProfileHandler  extends BaseRequestHandler<APIGatewayProx
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent requestEvent, Context lambdaContext) {
 
         try {
-            log.info("Received create request event: {}", requestEvent);
+            log.info("Received update step 4 request event: {}", requestEvent);
 
-            String userId = requestEvent.getPathParameters().get("userId");
+
             Map<String, Object> body = parseBody(requestEvent.getBody());
-            UpdateUserProfileRequest updateRequest = parseRequest(body);
+            VolunteerRequest updateRequest = parseRequest(body);
 
-            UserProfileResponse updatedProfile = userService.updateUserProfile(userId, updateRequest);
+            VolunteerResponse updatedVolunteer = volunteerService.updateVolunteerStep4(updateRequest);
 
-            SaayamResponse<UserProfileResponse> successResponse = responseBuilder.buildSuccessResponse(
-                    SaayamStatusCode.USER_ACCOUNT_UPDATED,
-                    new Object[]{userId},
-                    updatedProfile
+            SaayamResponse<VolunteerResponse> successResponse = responseBuilder.buildSuccessResponse(
+                    SaayamStatusCode.VOLUNTEER_UPDATED,
+                    new Object[]{updatedVolunteer.userId()},
+                    updatedVolunteer
             );
 
-            log.info("Create request successful. Response: {}", successResponse);
+
+            log.info("Update step 4 request successful. Response: {}", successResponse);
             return createResponse(HttpStatus.CREATED.value(), successResponse);
         } catch (EnumUnspecifiedException e) {
-            log.warn("EnumUnspecifiedException in CreateRequestHandler: ", e);
+            log.warn("EnumUnspecifiedException in UpdateVolunteerStep4Handler: ", e);
             return createErrorResponse(HttpStatus.BAD_REQUEST.value(), SaayamStatusCode.ENUM_UNSPECIFIED, e.getMessage());
         } catch (InvalidRequestException e) {
-            log.warn("InvalidRequestException in CreateRequestHandler: ", e);
+            log.warn("InvalidRequestException in UpdateVolunteerStep4Handler: ", e);
             return createErrorResponse(HttpStatus.BAD_REQUEST.value(), SaayamStatusCode.BAD_REQUEST, e.getMessage());
         } catch (Exception e) {
-            log.error("Unexpected error in CreateRequestHandler: ", e);
+            log.error("Unexpected error in UpdateVolunteerStep4Handler: ", e);
             return LambdaExceptionHandler.handleException(e, lambdaContext, getLocaleFromRequest(requestEvent));
         }
     }
 
-
-    private UpdateUserProfileRequest parseRequest(Map<String, Object> body) {
-        return objectMapper.convertValue(body, UpdateUserProfileRequest.class);
+    private VolunteerRequest parseRequest(Map<String, Object> body) {
+        return objectMapper.convertValue(body, VolunteerRequest.class);
     }
-
 
     private Map<String, Object> parseBody(String body) {
         try {
             return objectMapper.readValue(body, Map.class);
         } catch (Exception e) {
+            // todo: define a customized error
             throw new RuntimeException("Failed to parse request body", e);
         }
     }
 }
-
-
-
-
-
-
 

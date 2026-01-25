@@ -6,42 +6,40 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import org.sfa.volunteer.exception.EnumUnspecifiedException;
 import org.sfa.volunteer.exception.InvalidRequestException;
 import org.sfa.volunteer.exception.LambdaExceptionHandler;
-import org.sfa.volunteer.service.VolunteerService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.sfa.volunteer.dto.response.VolunteerResponse;
 import org.sfa.volunteer.dto.common.SaayamResponse;
 import org.sfa.volunteer.dto.common.SaayamStatusCode;
-import org.sfa.volunteer.dto.request.VolunteerRequest;
-import org.sfa.volunteer.dto.response.VolunteerResponse;
 import java.util.Locale;
 import org.sfa.volunteer.util.ResponseBuilder;
 import java.util.Map;
+import org.sfa.volunteer.dto.request.CreateUserRequest;
+import org.sfa.volunteer.service.VolunteerService;
 
 @Slf4j
-public class CreateVolunteerHandler extends BaseRequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
+public class GetVolunteerByUserIdHandler extends BaseRequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
 
     private static final VolunteerService volunteerService = context.getBean(VolunteerService.class);
     private static final ResponseBuilder responseBuilder = context.getBean(ResponseBuilder.class);
 
-    @Override
-    public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent requestEvent, Context lambdaContext) {
+
+@Override
+public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent requestEvent, Context lambdaContext) {
         try {
-            log.info("Received create request event: {}", requestEvent);
+        log.info("Received create request event: {}", requestEvent);
 
-            String lang = requestEvent.getHeaders().getOrDefault("Accept-Language", "en");
-            Locale locale = Locale.forLanguageTag(lang);
+        String lang = requestEvent.getHeaders().getOrDefault("Accept-Language", "en");
 
-            Map<String, Object> body = parseBody(requestEvent.getBody());
-            VolunteerRequest createRequest = parseRequest(body);
+        String userId = requestEvent.getPathParameters().get("userId");
 
-            VolunteerResponse created = volunteerService.createVolunteer(createRequest);
+        VolunteerResponse created = volunteerService.getVolunteerByUserId(userId);
 
-            SaayamResponse<VolunteerResponse> successResponse = responseBuilder.buildSuccessResponse(
-                    SaayamStatusCode.VOLUNTEER_CREATED,
-                    new Object[]{created.userId()},
-                    created
-            );
-
+        SaayamResponse<VolunteerResponse> successResponse = responseBuilder.buildSuccessResponse(
+                SaayamStatusCode.VOLUNTEER_CREATED,
+                new Object[]{created.userId()},
+                created
+        );
 
             log.info("Create request successful. Response: {}", successResponse);
             return createResponse(HttpStatus.CREATED.value(), successResponse);
@@ -55,12 +53,11 @@ public class CreateVolunteerHandler extends BaseRequestHandler<APIGatewayProxyRe
             log.error("Unexpected error in CreateRequestHandler: ", e);
             return LambdaExceptionHandler.handleException(e, lambdaContext, getLocaleFromRequest(requestEvent));
         }
-    }
+}
 
-
-    private VolunteerRequest parseRequest(Map<String, Object> body) {
-        return objectMapper.convertValue(body, VolunteerRequest.class);
-    }
+    private CreateUserRequest parseRequest(Map<String, Object> body) {
+        return objectMapper.convertValue(body, CreateUserRequest.class);
+        }
 
     private Map<String, Object> parseBody(String body) {
         try {
@@ -71,3 +68,5 @@ public class CreateVolunteerHandler extends BaseRequestHandler<APIGatewayProxyRe
         }
     }
 }
+
+

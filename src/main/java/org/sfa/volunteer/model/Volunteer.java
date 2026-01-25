@@ -15,7 +15,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.Objects;
+import org.sfa.volunteer.util.StringListConverter;
 
 @Entity
 @Data
@@ -48,7 +50,8 @@ public class Volunteer {
     private ZonedDateTime govtUpdateDate;
 
     @Column(name = "skills")
-    private String skills;
+    @jakarta.persistence.Convert(converter = StringListConverter.class)
+    private List<String> skills;
 
     @Column(name = "notification")
     private Boolean notification;
@@ -68,7 +71,7 @@ public class Volunteer {
                 ", tcUpdateDate=" + tcUpdateDate +
                 ", govtIdFilename='" + govtIdFilename + '\'' +
                 ", govtUpdateDate=" + govtUpdateDate +
-                ", skills='" + skills + '\'' +
+                ", skills=" + skills +
                 ", notification=" + notification +
                 ", isCompleted=" + isCompleted +
                 ", completedDate=" + completedDate +

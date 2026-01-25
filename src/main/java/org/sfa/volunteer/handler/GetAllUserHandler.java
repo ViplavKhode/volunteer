@@ -1,46 +1,34 @@
 package org.sfa.volunteer.handler;
 
 import com.amazonaws.services.lambda.runtime.Context;
-import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import org.sfa.volunteer.VolunteerApplication;
+import org.sfa.volunteer.exception.EnumUnspecifiedException;
+import org.sfa.volunteer.exception.InvalidRequestException;
+import org.sfa.volunteer.exception.LambdaExceptionHandler;
+import org.sfa.volunteer.service.UserService;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.sfa.volunteer.dto.common.SaayamResponse;
 import org.sfa.volunteer.dto.common.SaayamStatusCode;
+import java.util.Locale;
+import org.sfa.volunteer.util.ResponseBuilder;
+import java.util.Map;
+import org.sfa.volunteer.dto.request.CreateUserRequest;
 import org.sfa.volunteer.dto.response.PaginationResponse;
 import org.sfa.volunteer.dto.response.UserProfileResponse;
-import org.sfa.volunteer.service.UserService;
-import org.sfa.volunteer.util.ResponseBuilder;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
-import org.springframework.context.support.ResourceBundleMessageSource;
 
-import java.util.Locale;
-import java.util.Map;
+@Slf4j
+public class GetAllUserHandler extends BaseRequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
 
-public class GetAllUserHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
-    private static final UserService userService;
-    private static final ObjectMapper objectMapper = new ObjectMapper()
-            .registerModule(new JavaTimeModule())
-            .enable(SerializationFeature.INDENT_OUTPUT); // Enable pretty printing for better readability
-    private static final ResponseBuilder responseBuilder;
-    private static final ResourceBundleMessageSource messageSource;
-
-    static {
-        ApplicationContext context = new AnnotationConfigApplicationContext(VolunteerApplication.class);
-        userService = context.getBean(UserService.class);
-        responseBuilder = context.getBean(ResponseBuilder.class);
-        messageSource = context.getBean(ResourceBundleMessageSource.class);
-    }
+    private static final UserService userService = context.getBean(UserService.class);
+    private static final ResponseBuilder responseBuilder = context.getBean(ResponseBuilder.class);
 
     @Override
-    public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent requestEvent, Context context) {
-        APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
-
+    public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent requestEvent, Context lambdaContext) {
         try {
+            log.info("Received create request event: {}", requestEvent);
+
             String lang = requestEvent.getHeaders().getOrDefault("Accept-Language", "en");
             Locale locale = Locale.forLanguageTag(lang);
 
@@ -65,30 +53,31 @@ public class GetAllUserHandler implements RequestHandler<APIGatewayProxyRequestE
                     paginationResponse
             );
 
-            String responseBody = objectMapper.writeValueAsString(successResponse);
-            response.setBody(responseBody);
-            response.setStatusCode(200); // OK
+            log.info("Create request successful. Response: {}", successResponse);
+            return createResponse(HttpStatus.CREATED.value(), successResponse);
+        } catch (EnumUnspecifiedException e) {
+            log.warn("EnumUnspecifiedException in CreateRequestHandler: ", e);
+            return createErrorResponse(HttpStatus.BAD_REQUEST.value(), SaayamStatusCode.ENUM_UNSPECIFIED, e.getMessage());
+        } catch (InvalidRequestException e) {
+            log.warn("InvalidRequestException in CreateRequestHandler: ", e);
+            return createErrorResponse(HttpStatus.BAD_REQUEST.value(), SaayamStatusCode.BAD_REQUEST, e.getMessage());
         } catch (Exception e) {
-            String lang = requestEvent.getHeaders().getOrDefault("Accept-Language", "en");
-            Locale locale = Locale.forLanguageTag(lang);
-            String errorMessage = messageSource.getMessage(SaayamStatusCode.INTERNAL_SERVER_ERROR.getCode(), null, locale);
-
-            SaayamResponse<Void> errorResponse = responseBuilder.buildErrorResponse(
-                    500,
-                    SaayamStatusCode.INTERNAL_SERVER_ERROR,
-                    errorMessage
-            );
-
-            try {
-                String responseBody = objectMapper.writeValueAsString(errorResponse);
-                response.setBody(responseBody);
-            } catch (Exception jsonException) {
-                response.setBody("{\"message\":\"Failed to serialize error response\"}");
-            }
-
-            response.setStatusCode(500); // Internal Server Error
+            log.error("Unexpected error in CreateRequestHandler: ", e);
+            return LambdaExceptionHandler.handleException(e, lambdaContext, getLocaleFromRequest(requestEvent));
         }
+    }
 
-        return response;
+    private CreateUserRequest parseRequest(Map<String, Object> body) {
+        return objectMapper.convertValue(body, CreateUserRequest.class);
+    }
+
+    private Map<String, Object> parseBody(String body) {
+        try {
+            return objectMapper.readValue(body, Map.class);
+        } catch (Exception e) {
+            // todo: define a customized error
+            throw new RuntimeException("Failed to parse request body", e);
+        }
     }
 }
+
