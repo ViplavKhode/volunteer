@@ -32,6 +32,7 @@ public class UserCategory {
     @Column(name = "user_category_desc")
     private String userCategoryDesc;
 
-    @Column(name = "last_update_date")
+//    @Column(name = "last_update_date")
+    @Column(name="last_updated_at")
     private ZonedDateTime lastUpdateDate;
 }
