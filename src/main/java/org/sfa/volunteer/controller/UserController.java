@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import org.sfa.volunteer.dto.common.SaayamResponse;
 import org.sfa.volunteer.dto.common.SaayamStatusCode;
+import org.sfa.volunteer.dto.request.CheckUserExistsRequest;
 import org.sfa.volunteer.dto.request.CreateUserRequest;
 import org.sfa.volunteer.dto.request.FindUserProfileUsingEmail;
 import org.sfa.volunteer.dto.request.UpdateOrganizationRequest;
@@ -98,6 +99,12 @@ public class UserController {
     public SaayamResponse<OrganizationResponse> getOrganizationByUserId(@PathVariable String userId) {
         OrganizationResponse organization = userService.getOrganizationByUserId(userId);
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userId}, organization);
+    }
+
+    @PostMapping("/doesUserExist")
+    public SaayamResponse<UserExistsResponse> doesUserExist(@Valid @RequestBody CheckUserExistsRequest request) {
+        UserExistsResponse response = userService.checkUserExists(request);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.USER_EXISTS_CHECK, response);
     }
 
 }
