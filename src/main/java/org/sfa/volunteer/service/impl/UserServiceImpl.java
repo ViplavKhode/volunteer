@@ -1,6 +1,7 @@
 package org.sfa.volunteer.service.impl;
 
 import jakarta.transaction.Transactional;
+import org.sfa.volunteer.dto.request.CheckUserExistsRequest;
 import org.sfa.volunteer.dto.request.CreateUserRequest;
 import org.sfa.volunteer.dto.request.UpdateOrganizationRequest;
 import org.sfa.volunteer.dto.request.UpdateUserProfileRequest;
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -289,6 +291,76 @@ import java.util.stream.Collectors;
                 .city(organization.getCity())
                 .state(organization.getState())
                 .zipCode(organization.getZipCode())
+                .build();
+    }
+
+    @Override
+    public UserExistsResponse checkUserExists(CheckUserExistsRequest request) {
+        String firstName = request.firstName().trim();
+        String lastName = request.lastName().trim();
+        String email = request.email() != null ? request.email().trim() : null;
+        String phone = request.phone() != null ? request.phone().trim() : null;
+        String country = request.country() != null ? request.country().trim() : null;
+
+        boolean hasEmail = email != null && !email.isEmpty();
+        boolean hasPhone = phone != null && !phone.isEmpty();
+        boolean hasCountry = country != null && !country.isEmpty();
+
+        List<String> matchCriteria = new ArrayList<>();
+        matchCriteria.add("firstName");
+        matchCriteria.add("lastName");
+
+        // Start with base match: firstName + lastName
+        List<User> matchedUsers = userRepository.findByFirstNameAndLastNameIgnoreCase(firstName, lastName);
+
+        if (matchedUsers.isEmpty()) {
+            // No users found with matching firstName + lastName
+            return UserExistsResponse.builder()
+                    .exists(false)
+                    .userId(null)
+                    .matchedOn(null)
+                    .build();
+        }
+
+        // Apply additional filters to strengthen the match
+        // Filter by email if provided
+        if (hasEmail) {
+            List<User> emailFiltered = matchedUsers.stream()
+                    .filter(u -> email.equalsIgnoreCase(u.getPrimaryEmailAddress()))
+                    .toList();
+            if (!emailFiltered.isEmpty()) {
+                matchCriteria.add("email");
+                matchedUsers = emailFiltered;
+            }
+        }
+
+        // Filter by phone if provided
+        if (hasPhone) {
+            List<User> phoneFiltered = matchedUsers.stream()
+                    .filter(u -> phone.equals(u.getPrimaryPhoneNumber()))
+                    .toList();
+            if (!phoneFiltered.isEmpty()) {
+                matchCriteria.add("phone");
+                matchedUsers = phoneFiltered;
+            }
+        }
+
+        // Filter by country if provided
+        if (hasCountry) {
+            List<User> countryFiltered = matchedUsers.stream()
+                    .filter(u -> u.getCountry() != null && country.equalsIgnoreCase(u.getCountry().getCountryName()))
+                    .toList();
+            if (!countryFiltered.isEmpty()) {
+                matchCriteria.add("country");
+                matchedUsers = countryFiltered;
+            }
+        }
+
+        // Return the first matched user
+        return UserExistsResponse.builder()
+                .exists(true)
+                .userId(matchedUsers.get(0).getId())
+                .matchedOn(String.join(", ", matchCriteria))
                 .build();
     }
 

@@ -1,5 +1,6 @@
 package org.sfa.volunteer.service;
 
+import org.sfa.volunteer.dto.request.CheckUserExistsRequest;
 import org.sfa.volunteer.dto.request.CreateUserRequest;
 import org.sfa.volunteer.dto.request.UpdateOrganizationRequest;
 import org.sfa.volunteer.dto.request.UpdateUserProfileRequest;
@@ -29,4 +30,5 @@ public interface UserService {
 
     UserIdResponse getUserIdByEmail(String email);
 
+    UserExistsResponse checkUserExists(CheckUserExistsRequest request);
 }
