@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+import org.sfa.volunteer.util.Cors;
 
 public class ViewProfileImageHandler implements RequestHandler<Map<String, Object>, Map<String, Object>> {
 
@@ -54,7 +55,9 @@ public class ViewProfileImageHandler implements RequestHandler<Map<String, Objec
 
             Map<String, Object> resp = new HashMap<>();
             resp.put("statusCode", 200);
-            resp.put("headers", Map.of("Content-Type", img.contentType()));
+            Map<String, String> h = Cors.headers("POST,OPTIONS");
+            h.put("Content-Type", img.contentType());
+            resp.put("headers", h);
             resp.put("isBase64Encoded", true);
             resp.put("body", base64Body);
             return resp;
@@ -136,7 +139,9 @@ public class ViewProfileImageHandler implements RequestHandler<Map<String, Objec
     private static Map<String, Object> apiNoContent() {
         Map<String, Object> resp = new HashMap<>();
         resp.put("statusCode", 204);
-        resp.put("headers", Map.of());
+        Map<String, String> h = Cors.headers("POST,OPTIONS");
+        h.remove("Content-Type");
+        resp.put("headers", h);
         resp.put("isBase64Encoded", false);
         resp.put("body", "");
         return resp;
@@ -175,14 +180,14 @@ public class ViewProfileImageHandler implements RequestHandler<Map<String, Objec
         try {
             Map<String, Object> resp = new HashMap<>();
             resp.put("statusCode", status);
-            resp.put("headers", Map.of("Content-Type", "application/json"));
+            resp.put("headers", Cors.headers("POST,OPTIONS"));
             resp.put("isBase64Encoded", false);
             resp.put("body", MAPPER.writeValueAsString(Map.of("message", msg)));
             return resp;
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("statusCode", status);
-            resp.put("headers", Map.of("Content-Type", "application/json"));
+            resp.put("headers", Cors.headers("POST,OPTIONS"));
             resp.put("isBase64Encoded", false);
             resp.put("body", "{\"message\":\"" + msg.replace("\"", "'") + "\"}");
             return resp;

@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+import org.sfa.volunteer.util.Cors;
 
 public class DeleteProfileImageHandler implements RequestHandler<Map<String, Object>, Map<String, Object>> {
 
@@ -159,7 +160,7 @@ public class DeleteProfileImageHandler implements RequestHandler<Map<String, Obj
     private static Map<String, Object> apiJson(int status, Object payload) throws Exception {
         Map<String, Object> resp = new HashMap<>();
         resp.put("statusCode", status);
-        resp.put("headers", Map.of("Content-Type", "application/json"));
+        resp.put("headers", Cors.headers("DELETE,OPTIONS"));
         resp.put("isBase64Encoded", false);
         resp.put("body", MAPPER.writeValueAsString(payload));
         return resp;
@@ -171,7 +172,7 @@ public class DeleteProfileImageHandler implements RequestHandler<Map<String, Obj
         } catch (Exception e) {
             Map<String, Object> resp = new HashMap<>();
             resp.put("statusCode", status);
-            resp.put("headers", Map.of("Content-Type", "application/json"));
+            resp.put("headers", Cors.headers("DELETE,OPTIONS"));
             resp.put("isBase64Encoded", false);
             resp.put("body", "{\"message\":\"" + msg.replace("\"", "'") + "\"}");
             return resp;
