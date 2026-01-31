@@ -41,31 +41,49 @@ public class ViewProfileImageHandler implements RequestHandler<Map<String, Objec
 
             Map<String, Object> body = readJsonBody(event);
             String userId = asString(body.get("userId"));
-            if (isBlank(userId)) return apiError(400, "userId is required");
+            if (isBlank(userId)) {
+                Map<String, Object> resp = apiError(400, "userId is required");
+                debugResponse(context, "VIEW_400", resp);
+                return resp;
+            }
 
             // AUTH
             AuthInfo auth = authInfoFromEvent(event);
             authorizeUser(auth, userId);
 
             var imgOpt = storage.download(userId, region);
-            if (imgOpt.isEmpty()) return apiNoContent();
+            if (imgOpt.isEmpty()) {
+                Map<String, Object> resp = apiNoContent();
+                debugResponse(context, "VIEW_204", resp);
+                return resp;
+            }
 
             var img = imgOpt.get();
             String base64Body = Base64.getEncoder().encodeToString(img.bytes());
 
             Map<String, Object> resp = new HashMap<>();
             resp.put("statusCode", 200);
+
+            // CORS headers + real image content-type
             Map<String, String> h = Cors.headers("POST,OPTIONS");
             h.put("Content-Type", img.contentType());
+
             resp.put("headers", h);
             resp.put("isBase64Encoded", true);
             resp.put("body", base64Body);
+
+            debugResponse(context, "VIEW_200", resp);
             return resp;
 
         } catch (Forbidden ex) {
-            return apiError(403, ex.getMessage());
+            Map<String, Object> resp = apiError(403, ex.getMessage());
+            debugResponse(context, "VIEW_403", resp);
+            return resp;
+
         } catch (Exception e) {
-            return apiError(500, safeMsg(e));
+            Map<String, Object> resp = apiError(500, safeMsg(e));
+            debugResponse(context, "VIEW_500", resp);
+            return resp;
         }
     }
 
@@ -205,5 +223,17 @@ public class ViewProfileImageHandler implements RequestHandler<Map<String, Objec
     private static String safeMsg(Exception e) {
         String m = e.getMessage();
         return (m == null || m.isBlank()) ? e.getClass().getSimpleName() : m;
+    }
+    @SuppressWarnings("unchecked")
+    private static void debugResponse(Context context, String label, Map<String, Object> resp) {
+        if (context == null) return;
+        try {
+            Object h = resp.get("headers");
+            context.getLogger().log(label + " statusCode=" + resp.get("statusCode") + "\n");
+            context.getLogger().log(label + " headers=" + String.valueOf(h) + "\n");
+            context.getLogger().log(label + " isBase64Encoded=" + resp.get("isBase64Encoded") + "\n");
+        } catch (Exception e) {
+            context.getLogger().log(label + " debug failed: " + e.getMessage() + "\n");
+        }
     }
 }

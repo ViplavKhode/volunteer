@@ -54,15 +54,21 @@ public class UploadProfileImageHandler implements RequestHandler<Map<String, Obj
 
             Map<String, Object> result = storage.uploadBase64(userId, contentType, base64, region);
 
-            return apiJson(200, Map.of(
+            Map<String, Object> resp = apiJson(200, Map.of(
                     "message", "Profile image uploaded",
-                    "data", result
+                    "userId", userId
             ));
+            debugResponse(context, "UPLOAD_OK", resp);
+            return resp;
 
         } catch (Forbidden ex) {
-            return apiError(403, ex.getMessage());
+            Map<String, Object> resp = apiError(403, ex.getMessage());
+            debugResponse(context, "UPLOAD_403", resp);
+            return resp;
         } catch (Exception e) {
-            return apiError(500, safeMsg(e));
+            Map<String, Object> resp = apiError(500, safeMsg(e));
+            debugResponse(context, "UPLOAD_500", resp);
+            return resp;
         }
     }
 
@@ -195,5 +201,17 @@ public class UploadProfileImageHandler implements RequestHandler<Map<String, Obj
     private static String safeMsg(Exception e) {
         String m = e.getMessage();
         return (m == null || m.isBlank()) ? e.getClass().getSimpleName() : m;
+    }
+    @SuppressWarnings("unchecked")
+    private static void debugResponse(Context context, String label, Map<String, Object> resp) {
+        if (context == null) return;
+        try {
+            Object h = resp.get("headers");
+            context.getLogger().log(label + " statusCode=" + resp.get("statusCode") + "\n");
+            context.getLogger().log(label + " headers=" + String.valueOf(h) + "\n");
+            context.getLogger().log(label + " isBase64Encoded=" + resp.get("isBase64Encoded") + "\n");
+        } catch (Exception e) {
+            context.getLogger().log(label + " debug failed: " + e.getMessage() + "\n");
+        }
     }
 }
