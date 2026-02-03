@@ -15,7 +15,7 @@ import java.util.Objects;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Table(name = "user_availability")
+@Table(name = "user_availability", schema = "virginia_dev_saayam_rdbms")
 
 public class VolunteerUserAvailability {
     @Id

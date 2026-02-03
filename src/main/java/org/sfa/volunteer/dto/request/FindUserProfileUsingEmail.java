@@ -6,4 +6,5 @@ import lombok.Builder;
 
 @Builder
 public record FindUserProfileUsingEmail(@NotBlank @Email String email) {
+
 }

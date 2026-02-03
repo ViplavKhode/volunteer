@@ -22,7 +22,7 @@ import java.util.Objects;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Table(name = "volunteer_details")
+@Table(name = "volunteer_details", schema = "virginia_dev_saayam_rdbms")
 
 public class Volunteer {
     @Id

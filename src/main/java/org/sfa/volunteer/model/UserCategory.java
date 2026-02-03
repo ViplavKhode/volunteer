@@ -18,7 +18,7 @@ import java.time.ZonedDateTime;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Table(name = "user_category")
+@Table(name = "user_category", schema = "virginia_dev_saayam_rdbms")
 public class UserCategory {
 
     @Id

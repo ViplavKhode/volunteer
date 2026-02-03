@@ -29,4 +29,7 @@ public interface UserService {
 
     OrganizationResponse getOrganizationByUserId(String userId);
 
+    UserProfileResponse getPersonalInfoById(String userId);
+
+    UserProfileResponse updatePersonalInfo(String userId, UpdateUserProfileRequest updateRequest);
 }

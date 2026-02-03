@@ -18,7 +18,7 @@ import java.time.ZonedDateTime;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Table(name = "country")
+@Table(name = "country", schema = "virginia_dev_saayam_rdbms")
 public class Country {
 
     @Id

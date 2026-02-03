@@ -23,7 +23,7 @@ import java.util.Objects;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@Table(name = "state")
+@Table(name = "state", schema = "virginia_dev_saayam_rdbms")
 public class State {
 
     @Id
