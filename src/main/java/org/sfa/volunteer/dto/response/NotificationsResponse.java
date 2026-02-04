@@ -4,6 +4,7 @@ import lombok.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -16,4 +17,5 @@ public class NotificationsResponse {
     private String title;
     private String message;
     private LocalDateTime date;
+    private Boolean status;
 }

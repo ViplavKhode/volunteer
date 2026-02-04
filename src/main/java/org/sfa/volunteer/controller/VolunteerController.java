@@ -3,11 +3,14 @@ import jakarta.validation.Valid;
 import org.sfa.volunteer.dto.common.SaayamResponse;
 import org.sfa.volunteer.dto.common.SaayamStatusCode;
 import org.sfa.volunteer.dto.request.VolunteerRequest;
+import org.sfa.volunteer.dto.response.NotificationPaginationResponse;
+import org.sfa.volunteer.dto.response.NotificationsResponse;
 import org.sfa.volunteer.dto.response.VolunteerResponse;
 import org.sfa.volunteer.dto.response.PaginationResponse;
 import org.sfa.volunteer.service.VolunteerService;
 import org.sfa.volunteer.util.ResponseBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,6 +19,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/0.0.1/volunteers")
@@ -83,5 +88,25 @@ public class VolunteerController {
     public SaayamResponse<VolunteerResponse> getVolunteerDetails(@PathVariable String userId) throws Exception {
         VolunteerResponse response = volunteerService.getVolunteerByUserId(userId);
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userId}, response);
+    }
+
+    @GetMapping("/count/{userId}")
+    public SaayamResponse<Long> getNotificationsCount(@PathVariable String userId) {
+        Long notificationCount = volunteerService.getNotificationsCountAfterLastAccessed(userId);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, notificationCount);
+    }
+
+    //    Need to test this
+//    http://localhost:8080/0.0.1/volunteers/getNotifications?userId=1
+//    @GetMapping("/getNotifications")
+//    public SaayamResponse<NotificationPaginationResponse<NotificationsResponse>> getAllNotifications(@RequestParam String userId, @RequestParam int page, @RequestParam int size, @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime refTime) {
+//        NotificationPaginationResponse<NotificationsResponse> notificationsList = volunteerService.getNotificationsList(userId, page, size, refTime);
+//        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, notificationsList);
+//    }
+
+    @GetMapping("/getNotifications/{userId}")
+    public SaayamResponse<NotificationPaginationResponse<NotificationsResponse>> getAllNotifications(@PathVariable String userId, @RequestParam int page, @RequestParam int size, @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime refTime) {
+        NotificationPaginationResponse<NotificationsResponse> notificationsList = volunteerService.getNotificationsList(userId, page, size, refTime);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, notificationsList);
     }
 }

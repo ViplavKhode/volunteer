@@ -6,28 +6,25 @@ import org.sfa.volunteer.dto.request.VolunteerUserAvailabilityRequest;
 //import org.sfa.volunteer.dto.response.UserVolunteerSkillsResponse;
 //import org.sfa.volunteer.model.UserVolunteerSkills;
 //import org.sfa.volunteer.repository.UserVolunteerSkillsRepository;
-import org.sfa.volunteer.repository.VolunteerUserAvailabilityRepository;
-import org.sfa.volunteer.dto.response.VolunteerResponse;
-import org.sfa.volunteer.dto.response.PaginationResponse;
-import org.sfa.volunteer.dto.response.VolunteerUserAvailabilityResponse;
+import org.sfa.volunteer.dto.response.*;
+import org.sfa.volunteer.model.*;
+import org.sfa.volunteer.repository.*;
 import org.sfa.volunteer.exception.UserNotFoundException;
 import org.sfa.volunteer.exception.VolunteerException;
-import org.sfa.volunteer.model.Volunteer;
-import org.sfa.volunteer.model.User;
-import org.sfa.volunteer.model.VolunteerUserAvailability;
-import org.sfa.volunteer.repository.UserRepository;
-import org.sfa.volunteer.repository.VolunteerRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.sfa.volunteer.service.VolunteerService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -36,6 +33,8 @@ public class VolunteerServiceImpl implements VolunteerService {
     private final VolunteerRepository volunteerRepository;
     private final UserRepository userRepository;
     private final VolunteerUserAvailabilityRepository userAvailabilityRepository;
+    private final NotificationRepository notificationRepository;
+    private final UserNotificationStatusRepository userNotificationStatusRepository;
 
 //    private final UserVolunteerSkillsRepository userVolunteerSkillsRepository;
 
@@ -45,10 +44,12 @@ public class VolunteerServiceImpl implements VolunteerService {
     @Autowired
     public VolunteerServiceImpl(VolunteerRepository volunteerRepository, UserRepository userRepository,
             VolunteerUserAvailabilityRepository volunteerUserAvailabilityRepository,
-            VolunteerUserAvailabilityRepository userAvailabilityRepository) {
+            VolunteerUserAvailabilityRepository userAvailabilityRepository, NotificationRepository notificationRepository, UserNotificationStatusRepository userNotificationStatusRepository) {
         this.userRepository = userRepository;
         this.volunteerRepository = volunteerRepository;
         this.userAvailabilityRepository = userAvailabilityRepository;
+        this.notificationRepository = notificationRepository;
+        this.userNotificationStatusRepository = userNotificationStatusRepository;
 //        this.userVolunteerSkillsRepository = userVolunteerSkillsRepository;
     }
 
@@ -336,6 +337,76 @@ public class VolunteerServiceImpl implements VolunteerService {
                 .startTime(request.startTime())
                 .endTime(request.endTime())
                 .lastUpdateDate(request.lastUpdateDate()) 
+                .build();
+    }
+
+    public Long getNotificationsCountAfterLastAccessed(String userId){
+        Optional<LocalDateTime> lastAccessedTimeOptional = userNotificationStatusRepository.findLastAccessedTimeByUser(userId);
+        LocalDateTime lastAccessedTime = lastAccessedTimeOptional
+                .orElse(LocalDateTime.of(1970, 1, 1, 0, 0));
+        Long notificationsCount = notificationRepository.countByUser_IdAndCreatedAtAfter(userId, lastAccessedTime);
+        return notificationsCount;
+    }
+
+
+    public void updateUserNewLastAccessedTime(String userId, LocalDateTime newTime){
+        UserNotificationStatus userNotificationStatus = userNotificationStatusRepository.findByUserId(userId);
+        if (userNotificationStatus == null) {
+            // Create new record if it doesn't exist
+            Optional<User> userOpt = userRepository.findById(userId);
+            if (userOpt.isPresent()){
+                userNotificationStatus = UserNotificationStatus.builder()
+                        .user(userOpt.get())
+                        .lastAccessedAt(newTime)
+                        .build();
+            }
+            else{
+                return;
+            }
+
+        } else {
+            userNotificationStatus.setLastAccessedAt(newTime);
+        }
+        userNotificationStatusRepository.save(userNotificationStatus);
+    }
+
+    public NotificationPaginationResponse<NotificationsResponse> getNotificationsList(String userId, int page, int size, LocalDateTime clientRefTime){
+        LocalDateTime lastAccessedTime;
+        LocalDateTime currentAccessedTime;
+        Page<Notifications> notificationsPage;
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        if (page == 0 && clientRefTime == null) {
+            // First time opening the list: Get time from DB
+            Optional<LocalDateTime> lastAccessedTimeOptional = userNotificationStatusRepository.findLastAccessedTimeByUser(userId);
+            lastAccessedTime = lastAccessedTimeOptional
+                .orElse(LocalDateTime.of(1970, 1, 1, 0, 0));
+            currentAccessedTime = LocalDateTime.now();
+            updateUserNewLastAccessedTime(userId, currentAccessedTime);
+            notificationsPage = notificationRepository.findByUserIdAndCreatedAtLessThanEqual(userId, Optional.of(currentAccessedTime), pageable);
+
+        } else {
+            lastAccessedTime = clientRefTime;
+            Optional<LocalDateTime> lastAccessedTimeOptional = userNotificationStatusRepository.findLastAccessedTimeByUser(userId);
+
+            notificationsPage = notificationRepository.findByUserIdAndCreatedAtLessThanEqual(userId, lastAccessedTimeOptional, pageable);
+        }
+
+        List<NotificationsResponse> list = notificationsPage.stream()
+                .map(n -> NotificationsResponse.builder()
+                        .type(n.getType().getType_name())
+                        .title(n.getType().getDescription())
+                        .message(n.getMessage())
+                        .date(n.getCreatedAt())
+                        .status(n.getCreatedAt().isAfter(lastAccessedTime))
+                        .build())
+                .collect(Collectors.toList());
+
+        return NotificationPaginationResponse.<NotificationsResponse>builder()
+                .items(list)
+                .currentPage(notificationsPage.getNumber())
+                .totalItems(notificationsPage.getTotalElements())
+                .totalPages(notificationsPage.getTotalPages())
+                .referenceTimestamp(lastAccessedTime)
                 .build();
     }
 }

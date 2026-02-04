@@ -1,19 +1,31 @@
 package org.sfa.volunteer.repository;
 
 import org.sfa.volunteer.model.Notifications;
-import org.sfa.volunteer.model.User;
+import org.springframework.boot.autoconfigure.data.web.SpringDataWebProperties;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface NotificationRepository extends JpaRepository<Notifications, Long> {
 
-// "Count all notifications for this user that were created AFTER the last accessed time/ watermark"
-     long countByUserIdAndCreatedAtAfter(String userId, LocalDateTime lastAccessed);
+     long countByUser_IdAndCreatedAtAfter(String userId, LocalDateTime lastAccessed);
 
-//return the notifications list in the descending order
-     List<Notifications> findByUserIdAndCreatedAtAfterOrderByCreatedAtDesc(String userId, LocalDateTime lastAccessed);
+//     Page<Notifications> findByUserIdAndCreatedAtAfter(
+//             String userId,
+//             LocalDateTime lastAccessed,
+//             Pageable pageable
+//     );
+
+
+     Page<Notifications> findByUserIdAndCreatedAtLessThanEqual(
+             String userId,
+             Optional<LocalDateTime> lastAccessed,
+             Pageable pageable
+     );
 
 }
+
