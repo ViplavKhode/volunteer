@@ -8,6 +8,7 @@ import org.sfa.volunteer.dto.response.CreateUserResponse;
 import org.sfa.volunteer.dto.response.PaginationResponse;
 import org.sfa.volunteer.dto.response.UserProfileResponse;
 import org.sfa.volunteer.dto.response.WizardStatusResponse;
+import org.sfa.volunteer.dto.response.OrganizationResponse;
 
 public interface UserService {
 
