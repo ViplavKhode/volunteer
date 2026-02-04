@@ -1,9 +1,12 @@
 package org.sfa.volunteer.controller;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import org.sfa.volunteer.dto.common.SaayamResponse;
 import org.sfa.volunteer.dto.common.SaayamStatusCode;
 import org.sfa.volunteer.dto.request.CreateUserRequest;
+import org.sfa.volunteer.dto.request.FindUserProfileUsingEmail;
 import org.sfa.volunteer.dto.request.UpdateOrganizationRequest;
 import org.sfa.volunteer.dto.request.UpdateUserProfileRequest;
 import org.sfa.volunteer.dto.response.*;
@@ -39,11 +42,16 @@ public class UserController {
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, response);
     }
 
-    @GetMapping("/profile")
-    public SaayamResponse<UserProfileResponse> getUserProfileByEmail(@Valid @RequestBody CreateUserRequest request) {
-        String email = request.email().toString();
-        UserProfileResponse response = userService.getUserProfileByEmail(email);
-        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{email}, response);
+    @GetMapping("/profileByEmail/{email}")
+    public SaayamResponse<UserProfileResponse> getUserProfileByEmail(@PathVariable("email") @Email @NotBlank String email) {
+        UserProfileResponse profile = userService.getUserProfileByEmail(email);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{email}, profile);
+    }
+
+    @PostMapping("/userIdByEmail")
+    public SaayamResponse<UserIdResponse> getUserIdByEmail(@RequestBody FindUserProfileUsingEmail userEmail) {
+        UserIdResponse email = userService.getUserIdByEmail(userEmail.email());
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userEmail}, email);
     }
 
     @GetMapping("/profile/{userId}")
