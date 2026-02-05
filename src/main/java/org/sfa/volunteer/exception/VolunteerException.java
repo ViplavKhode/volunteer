@@ -24,4 +24,9 @@ public class VolunteerException extends RuntimeException {
         return new VolunteerException(SaayamStatusCode.INVALID_VOLUNTEER_STEP.toString(), UserId);
     }
 
+    public static VolunteerException volunteerReferenceTimeNotFound(String UserId) throws Exception {
+        return new VolunteerException(SaayamStatusCode.BAD_REQUEST.toString(), UserId);
+    }
+
+
 }

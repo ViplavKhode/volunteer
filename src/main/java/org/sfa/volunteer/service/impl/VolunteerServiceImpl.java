@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import jakarta.transaction.Transactional;
+import org.sfa.volunteer.dto.common.SaayamStatusCode;
 import org.sfa.volunteer.dto.request.VolunteerRequest;
 import org.sfa.volunteer.dto.request.VolunteerUserAvailabilityRequest;
 //import org.sfa.volunteer.dto.response.UserVolunteerSkillsResponse;
@@ -408,6 +409,8 @@ public class VolunteerServiceImpl implements VolunteerService {
 
     public Long getNotificationsCountAfterLastAccessed(String userId){
         Optional<LocalDateTime> lastAccessedTimeOptional = userNotificationStatusRepository.findLastAccessedTimeByUser(userId);
+        System.out.println("lastAccessedTimeOptional is below");
+        System.out.println(lastAccessedTimeOptional);
         LocalDateTime lastAccessedTime = lastAccessedTimeOptional
                 .orElse(LocalDateTime.of(1970, 1, 1, 0, 0));
         return notificationRepository.countByUser_IdAndCreatedAtAfter(userId, lastAccessedTime);
@@ -435,7 +438,14 @@ public class VolunteerServiceImpl implements VolunteerService {
         userNotificationStatusRepository.save(userNotificationStatus);
     }
 
-    public NotificationPaginationResponse<NotificationsResponse> getNotificationsList(String userId, int page, int size, LocalDateTime clientRefTime){
+    public NotificationPaginationResponse<NotificationsResponse> getNotificationsList(String userId, int page, int size, LocalDateTime clientRefTime) throws Exception {
+
+        if (page > 0 && clientRefTime == null) {
+
+            throw VolunteerException.volunteerReferenceTimeNotFound(userId);
+//            throw new IllegalArgumentException("Pagination Error: 'refTime' is required for page " + page);
+        }
+
         LocalDateTime lastAccessedTime;
         LocalDateTime currentAccessedTime;
         Page<Notifications> notificationsPage;

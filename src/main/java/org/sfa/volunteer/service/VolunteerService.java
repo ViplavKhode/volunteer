@@ -37,7 +37,7 @@ public interface VolunteerService {
 
     Long getNotificationsCountAfterLastAccessed(String userId);
 
-    NotificationPaginationResponse<NotificationsResponse> getNotificationsList(String userId, int page, int size, LocalDateTime clientRefTime);
+    NotificationPaginationResponse<NotificationsResponse> getNotificationsList(String userId, int page, int size, LocalDateTime clientRefTime) throws Exception;
 
 
 

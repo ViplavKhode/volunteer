@@ -7,6 +7,7 @@ import org.sfa.volunteer.dto.response.NotificationPaginationResponse;
 import org.sfa.volunteer.dto.response.NotificationsResponse;
 import org.sfa.volunteer.dto.response.VolunteerResponse;
 import org.sfa.volunteer.dto.response.PaginationResponse;
+import org.sfa.volunteer.exception.VolunteerException;
 import org.sfa.volunteer.service.VolunteerService;
 import org.sfa.volunteer.util.ResponseBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -105,8 +106,12 @@ public class VolunteerController {
 //    }
 
     @GetMapping("/getNotifications/{userId}")
-    public SaayamResponse<NotificationPaginationResponse<NotificationsResponse>> getAllNotifications(@PathVariable String userId, @RequestParam int page, @RequestParam int size, @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime refTime) {
-        NotificationPaginationResponse<NotificationsResponse> notificationsList = volunteerService.getNotificationsList(userId, page, size, refTime);
-        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, notificationsList);
+    public SaayamResponse<NotificationPaginationResponse<NotificationsResponse>> getAllNotifications(@PathVariable String userId, @RequestParam int page, @RequestParam int size, @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime refTime) throws Exception {
+        try{
+            NotificationPaginationResponse<NotificationsResponse> notificationsList = volunteerService.getNotificationsList(userId, page, size, refTime);
+            return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, notificationsList);
+        } catch (VolunteerException e){
+            return  responseBuilder.buildErrorResponse(500, SaayamStatusCode.BAD_REQUEST, e.getMessage());
     }
+}
 }
