@@ -42,7 +42,7 @@ public class Notifications {
     @Column(name = "message", nullable = false, columnDefinition = "TEXT")
     private String message;
 
-    @Enumerated(EnumType.STRING)
+    @jakarta.persistence.Convert(converter = org.sfa.volunteer.converter.StatusTypeConverter.class)
     @Column(name = "status", columnDefinition = "status_type")
     private StatusType status;
 
