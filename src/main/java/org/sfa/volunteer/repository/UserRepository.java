@@ -10,4 +10,8 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, String> {
 
     List<User> findByPrimaryEmailAddress(String email);
+
+    Optional<User> findFirstByPrimaryEmailAddressOrderByLastUpdateDateDesc(String email);
+    // fallback if lastUpdateDate is null/old data
+    Optional<User> findFirstByPrimaryEmailAddressOrderByIdDesc(String email);
 }

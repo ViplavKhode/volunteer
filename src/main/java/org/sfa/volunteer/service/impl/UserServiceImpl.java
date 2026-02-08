@@ -300,5 +300,18 @@ public class UserServiceImpl implements UserService {
     public boolean userExists(String userId) {
         return userRepository.existsById(userId);
     }
+    @Override
+    public String getUserIdByEmailForAuth(String email) {
+        if (email == null || email.isBlank()) {
+            throw new UserNotFoundException("email is blank");
+        }
+        var userOpt = userRepository.findFirstByPrimaryEmailAddressOrderByLastUpdateDateDesc(email);
+        if (userOpt.isEmpty()) {
+            userOpt = userRepository.findFirstByPrimaryEmailAddressOrderByIdDesc(email);
+        }
+
+        User user = userOpt.orElseThrow(() -> new UserNotFoundException(email));
+        return user.getId();
+    }
 
 }

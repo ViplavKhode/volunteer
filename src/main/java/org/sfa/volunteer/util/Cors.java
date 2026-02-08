@@ -10,6 +10,7 @@ public class Cors {
         h.put("Access-Control-Allow-Headers",
                 "Content-Type,Authorization,X-Dev-Region,X-Amz-Date,X-Api-Key,X-Amz-Security-Token");
         h.put("Access-Control-Allow-Methods", methods);
+        h.put("Content-Type", "application/json");
         return h;
     }
 }

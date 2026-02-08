@@ -32,4 +32,5 @@ public interface UserService {
     void setProfilePicturePath(String userId, String s3Uri);
     java.util.Optional<String> getProfilePicturePath(String userId);
     boolean userExists(String userId);
+    String getUserIdByEmailForAuth(String email);
 }

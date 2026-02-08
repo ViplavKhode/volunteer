@@ -5,7 +5,6 @@ import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.sfa.volunteer.VolunteerApplication;
-import org.sfa.volunteer.dto.response.UserProfileResponse;
 import org.sfa.volunteer.service.ProfileImageStorageService;
 import org.sfa.volunteer.service.UserService;
 import org.springframework.boot.WebApplicationType;
@@ -17,10 +16,15 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import org.sfa.volunteer.util.Cors;
+import com.fasterxml.jackson.core.JsonParser;
+import org.springframework.web.server.ResponseStatusException;
+import org.sfa.volunteer.exception.UserNotFoundException;
 
 public class UploadProfileImageHandler implements RequestHandler<Map<String, Object>, Map<String, Object>> {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = new ObjectMapper()
+            .configure(JsonParser.Feature.ALLOW_TRAILING_COMMA, true)
+            .configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, true);
 
     private static final ConfigurableApplicationContext CTX =
             new SpringApplicationBuilder(VolunteerApplication.class)
@@ -62,13 +66,9 @@ public class UploadProfileImageHandler implements RequestHandler<Map<String, Obj
             return resp;
 
         } catch (Forbidden ex) {
-            Map<String, Object> resp = apiError(403, ex.getMessage());
-            debugResponse(context, "UPLOAD_403", resp);
-            return resp;
+            return apiErrorWithMethods(403, ex.getMessage(), "POST,OPTIONS");
         } catch (Exception e) {
-            Map<String, Object> resp = apiError(500, safeMsg(e));
-            debugResponse(context, "UPLOAD_500", resp);
-            return resp;
+            return handleKnownExceptions(e, "POST,OPTIONS");
         }
     }
 
@@ -111,14 +111,12 @@ public class UploadProfileImageHandler implements RequestHandler<Map<String, Obj
 
         if (isBlank(auth.email)) throw new Forbidden("JWT email missing");
 
-        UserProfileResponse caller;
+        String callerSid;
         try {
-            caller = userService.getUserProfileByEmail(auth.email);
+            callerSid = userService.getUserIdByEmailForAuth(auth.email);
         } catch (Exception e) {
             throw new Forbidden("JWT user not mapped to DB user");
         }
-
-        String callerSid = caller.id();
         if (isBlank(callerSid)) throw new Forbidden("JWT user not mapped to DB user");
         if (!callerSid.equals(targetUserId)) throw new Forbidden("Not allowed");
     }
@@ -126,26 +124,46 @@ public class UploadProfileImageHandler implements RequestHandler<Map<String, Obj
     @SuppressWarnings("unchecked")
     private static Map<String, Object> claims(Map<String, Object> event) {
         Object rc = event.get("requestContext");
-        if (!(rc instanceof Map)) return Map.of();
+        if (rc instanceof Map<?, ?> rcMap) {
+            Object auth = ((Map<String, Object>) rcMap).get("authorizer");
+            if (auth instanceof Map<?, ?> authMap) {
+                Object c = ((Map<String, Object>) authMap).get("claims");
+                if (c instanceof Map<?, ?> m) return (Map<String, Object>) m;
+            }
+        }
 
-        Object auth = ((Map<String, Object>) rc).get("authorizer");
-        if (!(auth instanceof Map)) return Map.of();
+        Map<String, Object> out = new HashMap<>();
+        Object email = event.get("cognitoEmail");
+        Object groups = event.get("cognitoGroups");
 
-        Object c = ((Map<String, Object>) auth).get("claims");
-        if (c instanceof Map<?, ?> m) return (Map<String, Object>) m;
+        if (email != null) out.put("email", String.valueOf(email));
+        if (groups != null) out.put("cognito:groups", String.valueOf(groups));
 
-        return Map.of();
+        return out;
     }
 
     // ---------------- body / helpers ----------------
 
     private static Map<String, Object> readJsonBody(Map<String, Object> event) throws Exception {
-        String body = asString(event.get("body"));
-        if (body == null) body = "";
+        Object raw = event.get("body");
+        if (raw == null) return Map.of();
+
+        if (raw instanceof Map<?, ?> m) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> mm = (Map<String, Object>) m;
+            return mm;
+        }
+
+        String body = String.valueOf(raw).trim();
+        if (body.isBlank()) return Map.of();
 
         boolean isB64 = Boolean.TRUE.equals(event.get("isBase64Encoded"));
-        if (isB64 && !body.isBlank()) {
-            body = new String(Base64.getDecoder().decode(body), StandardCharsets.UTF_8);
+        if (isB64) {
+            body = new String(Base64.getDecoder().decode(body), StandardCharsets.UTF_8).trim();
+        }
+
+        if (body.startsWith("\"") && body.endsWith("\"")) {
+            body = MAPPER.readValue(body, String.class).trim();
         }
 
         if (body.isBlank()) return Map.of();
@@ -212,6 +230,37 @@ public class UploadProfileImageHandler implements RequestHandler<Map<String, Obj
             context.getLogger().log(label + " isBase64Encoded=" + resp.get("isBase64Encoded") + "\n");
         } catch (Exception e) {
             context.getLogger().log(label + " debug failed: " + e.getMessage() + "\n");
+        }
+    }
+    private static Map<String, Object> handleKnownExceptions(Exception e, String methods) {
+        if (e instanceof UserNotFoundException unfe) {
+            return apiErrorWithMethods(404, "User not found: " + unfe.getMessage(), methods);
+        }
+
+        if (e instanceof ResponseStatusException rse) {
+            int code = rse.getStatusCode().value();
+            String msg = (rse.getReason() == null || rse.getReason().isBlank()) ? "Request failed" : rse.getReason();
+            return apiErrorWithMethods(code, msg, methods);
+        }
+
+        return apiErrorWithMethods(500, safeMsg(e), methods);
+    }
+
+    private static Map<String, Object> apiErrorWithMethods(int status, String msg, String methods) {
+        try {
+            Map<String, Object> resp = new HashMap<>();
+            resp.put("statusCode", status);
+            resp.put("headers", Cors.headers(methods));
+            resp.put("isBase64Encoded", false);
+            resp.put("body", MAPPER.writeValueAsString(Map.of("message", msg)));
+            return resp;
+        } catch (Exception ex) {
+            Map<String, Object> resp = new HashMap<>();
+            resp.put("statusCode", status);
+            resp.put("headers", Cors.headers(methods));
+            resp.put("isBase64Encoded", false);
+            resp.put("body", "{\"message\":\"" + msg.replace("\"", "'") + "\"}");
+            return resp;
         }
     }
 }

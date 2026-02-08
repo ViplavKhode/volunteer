@@ -34,10 +34,8 @@ public class ProfileImageStorageService {
     @Value("${saayam.s3.allowedMime:image/jpeg,image/png,image/webp}")
     private String allowedMimeCsv;
 
-    @Value("${saayam.s3.keyPattern:users/%s/profile.jpg}")
+    @Value("${saayam.s3.keyPattern:users/%s/profile}")
     private String keyPattern;
-
-    private final Map<String, String> keyByUser = new ConcurrentHashMap<>();
 
     public ProfileImageStorageService(
             UserService userService,
@@ -68,8 +66,12 @@ public class ProfileImageStorageService {
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid base64");
         }
-
-        validate(contentType, bytes.length);
+        String detected = detectMime(bytes);
+        if (detected == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Unsupported image type. Allowed: image/jpeg, image/png, image/webp");
+        }
+        validate(detected, bytes.length);
 
         String effectiveRegion = (regionHint == null || regionHint.isBlank()) ? "us-east-1" : regionHint;
         String bucket = pickBucket(effectiveRegion);
@@ -80,7 +82,7 @@ public class ProfileImageStorageService {
                     PutObjectRequest.builder()
                             .bucket(bucket)
                             .key(key)
-                            .contentType(contentType)
+                            .contentType(detected)
                             .serverSideEncryption("AES256")
                             .build(),
                     RequestBody.fromBytes(bytes)
@@ -91,7 +93,6 @@ public class ProfileImageStorageService {
 
         String s3Uri = "s3://" + bucket + "/" + key;
         userService.setProfilePicturePath(userId, s3Uri);
-        keyByUser.put(userId, key);
 
         return Map.of(
                 "message", "Profile image uploaded",
@@ -103,51 +104,45 @@ public class ProfileImageStorageService {
     }
 
     public void delete(String userId, String regionHint) {
-
         if (!userService.userExists(userId)) {
-            throw new org.sfa.volunteer.exception.UserNotFoundException(userId);
+            throw new UserNotFoundException(userId);
         }
 
         var uriOpt = userService.getProfilePicturePath(userId);
-        if (uriOpt.isPresent()) {
-            URI uri = URI.create(uriOpt.get());
-            String ssp = uri.getSchemeSpecificPart();
-            if (ssp.startsWith("//")) ssp = ssp.substring(2);
-
-            int slash = ssp.indexOf('/');
-            if (slash <= 0) {
-                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Invalid profile picture URI");
-            }
-
-            String bucket = ssp.substring(0, slash);
-            String key = ssp.substring(slash + 1);
-
-            String effectiveRegion = (regionHint == null || regionHint.isBlank())
-                    ? (bucket.equals(euBucket) ? "eu-west-1" : "us-east-1")
-                    : regionHint;
-
-            try {
-                pickClient(effectiveRegion).deleteObject(
-                        DeleteObjectRequest.builder().bucket(bucket).key(key).build()
-                );
-            } catch (software.amazon.awssdk.services.s3.model.S3Exception e) {
-                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to delete profile image", e);
-            }
-
-            userService.setProfilePicturePath(userId, null);
-            return;
+        if (uriOpt.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Profile image not found");
         }
 
-        // Fallback
-        String effectiveRegion = (regionHint == null || regionHint.isBlank()) ? "us-east-1" : regionHint;
-        String bucket = pickBucket(effectiveRegion);
-        String key = buildKey(userId);
+        URI uri = URI.create(uriOpt.get());
+        String ssp = uri.getSchemeSpecificPart();
+        if (ssp.startsWith("//")) ssp = ssp.substring(2);
+
+        int slash = ssp.indexOf('/');
+        if (slash <= 0) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Invalid profile picture URI");
+        }
+
+        String bucket = ssp.substring(0, slash);
+        String key = ssp.substring(slash + 1);
+
+        String effectiveRegion = (regionHint == null || regionHint.isBlank())
+                ? (bucket.equals(euBucket) ? "eu-west-1" : "us-east-1")
+                : regionHint;
+
+        S3Client client = pickClient(effectiveRegion);
 
         try {
-            pickClient(effectiveRegion).deleteObject(
-                    DeleteObjectRequest.builder().bucket(bucket).key(key).build()
-            );
-        } catch (software.amazon.awssdk.services.s3.model.S3Exception e) {
+            client.headObject(HeadObjectRequest.builder().bucket(bucket).key(key).build());
+        } catch (S3Exception e) {
+            if (e.statusCode() == 404) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Profile image not found");
+            }
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to verify profile image", e);
+        }
+
+        try {
+            client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());
+        } catch (S3Exception e) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to delete profile image", e);
         }
 
@@ -242,5 +237,20 @@ public class ProfileImageStorageService {
 
     private S3Client pickClient(String regionHint) {
         return isEu(regionHint) ? s3ClientEu : s3ClientUs;
+    }
+    private String detectMime(byte[] bytes) {
+        if (bytes == null || bytes.length < 12) return null;
+        if ((bytes[0] & 0xFF) == 0xFF && (bytes[1] & 0xFF) == 0xD8 && (bytes[2] & 0xFF) == 0xFF) {
+            return "image/jpeg";
+        }
+        if ((bytes[0] & 0xFF) == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47
+                && bytes[4] == 0x0D && bytes[5] == 0x0A && bytes[6] == 0x1A && bytes[7] == 0x0A) {
+            return "image/png";
+        }
+        if (bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F'
+                && bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P') {
+            return "image/webp";
+        }
+        return null;
     }
 }
