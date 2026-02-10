@@ -26,7 +26,7 @@ import java.util.Optional;
 
 @Service
 @Transactional
-public class UserServiceImpl implements UserService {
+    public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final UserStatusRepository userStatusRepository;
     private final OrganizationRepository organizationRepository;
@@ -177,13 +177,28 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserProfileResponse getUserProfileByEmail(String email) {
-        List<User> user = userRepository.findByPrimaryEmailAddress(email);
+        List<User> user = userRepository.findByPrimaryEmailAddress(email.trim());
 
-        if (user.isEmpty()) {
+        if (user==null || user.isEmpty()) {
             throw new UserNotFoundException(email);
         }
 
         return mapToUserProfileResponse(user.get(0));
+    }
+
+    @Override
+    public UserIdResponse getUserIdByEmail(String email){
+        List<User> user = userRepository.findFirstByPrimaryEmailAddressIgnoreCase(email.trim());
+
+        if(user==null || user.isEmpty()){
+            throw new UserNotFoundException(email);
+        }
+
+        return mapToUserIdResponse(user.get(0));
+    }
+
+    private UserIdResponse mapToUserIdResponse(User user){
+        return UserIdResponse.builder().user_id(user.getId()).build();
     }
 
     private UserProfileResponse mapToUserProfileResponse(User user) {
