@@ -218,7 +218,9 @@ public class UserController {
             @Valid @RequestBody SignOffRequest request) {
         String userId = request.userId();
         String reason = request.reason();
-        profileImageStorageService.delete(userId, "us-east-1");
+        if (userService.getProfilePicturePath(userId).isPresent()) {
+            profileImageStorageService.delete(userId, "us-east-1");
+        }
         SignOffResponse response = userService.signOffUser(userId, reason);
         return responseBuilder.buildSuccessResponse(
                 SaayamStatusCode.USER_DELETED,

@@ -67,7 +67,9 @@ public class SignOffUserHandler implements RequestHandler<APIGatewayProxyRequest
             String reason = signOffRequest.reason(); // optional
 
             // Delete profile image
-            profileImageStorageService.delete(userId, "us-east-1");
+            if (userService.getProfilePicturePath(userId).isPresent()) {
+                profileImageStorageService.delete(userId, "us-east-1");
+            }
 
             // Sign off user
             SignOffResponse signOffResponse =
