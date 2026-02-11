@@ -292,5 +292,31 @@ import java.util.stream.Collectors;
                 .build();
     }
 
+    @Override
+    public UserProfileResponse getPersonalInfoById(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+        return mapToUserProfileResponse(user);
+    }
+
+    @Override
+    public UserProfileResponse updatePersonalInfo(String userId, UpdateUserProfileRequest updateRequest) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+
+        // Update only editable fields for personal info
+        user.setFirstName(updateRequest.firstName());
+        user.setLastName(updateRequest.lastName());
+        user.setPrimaryPhoneNumber(updateRequest.primaryPhoneNumber());
+        user.setAddressLine1(updateRequest.addressLine1());
+        user.setCity(updateRequest.cityName());
+        user.setZipCode(updateRequest.zipCode());
+        user.setGender(updateRequest.gender());
+        user.setTimeZone(updateRequest.timeZone());
+        user.setLastUpdateDate(ZonedDateTime.now(ZoneId.of("UTC")));
+
+        User updatedUser = userRepository.save(user);
+        return mapToUserProfileResponse(updatedUser);
+    }
 
 }

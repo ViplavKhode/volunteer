@@ -1,0 +1,14 @@
+diff --git a/src/main/java/org/sfa/volunteer/dto/request/UpdateUserProfileRequest.java b/src/main/java/org/sfa/volunteer/dto/request/UpdateUserProfileRequest.java
+index f4e6892..3474a13 100644
+--- a/src/main/java/org/sfa/volunteer/dto/request/UpdateUserProfileRequest.java
++++ b/src/main/java/org/sfa/volunteer/dto/request/UpdateUserProfileRequest.java
+@@ -16,5 +16,8 @@ public record UpdateUserProfileRequest(
+         String zipCode,
+         String profilePicturePath,
+         Integer volunteerStage,
+-        ZonedDateTime volunteerUpdateDate) {
++        ZonedDateTime volunteerUpdateDate,
++        String primaryPhoneNumber,
++        String gender,
++        String timeZone) {
+ }
