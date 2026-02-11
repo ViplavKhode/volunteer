@@ -12,9 +12,9 @@ public interface UserService {
     PaginationResponse<UserProfileResponse> findAllUsersWithPagination(Integer pageNumber, Integer pageSize);
 
     UserProfileResponse getUserProfileById(String userId);
-    
+
     WizardStatusResponse getWizardStatus(String userId);
-    
+
     AddressStatusResponse getAddressStatus(String userId);
 
     UserProfileResponse getUserProfileByEmail(String email);
@@ -26,6 +26,8 @@ public interface UserService {
     OrganizationResponse updateUserOrganization(String userId, UpdateOrganizationRequest request);
 
     OrganizationResponse getOrganizationByUserId(String userId);
+
+    SignOffResponse signOffUser(String userId, String reason);
 
     UserIdResponse getUserIdByEmail(String email);
 
