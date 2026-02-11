@@ -15,6 +15,7 @@ import org.sfa.volunteer.model.User;
 import org.sfa.volunteer.model.Volunteer;
 import org.sfa.volunteer.model.VolunteerUserAvailability;
 import org.sfa.volunteer.repository.UserRepository;
+import org.sfa.volunteer.repository.UserVolunteerSkillRepository;
 import org.sfa.volunteer.repository.VolunteerRepository;
 import org.sfa.volunteer.repository.VolunteerUserAvailabilityRepository;
 import org.sfa.volunteer.service.VolunteerService;
@@ -36,6 +37,7 @@ public class VolunteerServiceImpl implements VolunteerService {
     private final VolunteerRepository volunteerRepository;
     private final UserRepository userRepository;
     private final VolunteerUserAvailabilityRepository userAvailabilityRepository;
+    private final UserVolunteerSkillRepository userVolunteerSkillRepository;
 
     // private final UserVolunteerSkillsRepository userVolunteerSkillsRepository;
 
@@ -46,11 +48,12 @@ public class VolunteerServiceImpl implements VolunteerService {
     @Autowired
     public VolunteerServiceImpl(VolunteerRepository volunteerRepository, UserRepository userRepository,
                                 VolunteerUserAvailabilityRepository volunteerUserAvailabilityRepository,
-                                VolunteerUserAvailabilityRepository userAvailabilityRepository) {
+                                VolunteerUserAvailabilityRepository userAvailabilityRepository,
+                                UserVolunteerSkillRepository userVolunteerSkillRepository) {
         this.userRepository = userRepository;
         this.volunteerRepository = volunteerRepository;
         this.userAvailabilityRepository = userAvailabilityRepository;
-        // this.userVolunteerSkillsRepository = userVolunteerSkillsRepository;
+        this.userVolunteerSkillRepository = userVolunteerSkillRepository;
     }
 
     private void updateUser(User user, Integer step) {
@@ -77,6 +80,11 @@ public class VolunteerServiceImpl implements VolunteerService {
 
         volunteer = volunteerRepository.save(volunteer);
         updateUser(user, request.step());
+
+        List<String> skills = Optional.ofNullable(request.skills()).orElse(Collections.emptyList());
+        if (!skills.isEmpty()) {
+            saveUserSkills(user, skills);
+    }
 
         return mapToVolunteerResponse(volunteer);
     }
@@ -392,4 +400,26 @@ public class VolunteerServiceImpl implements VolunteerService {
                 //.lastUpdateDate(request.lastUpdateDate())
                 .build();
     }
+
+    private void saveUserSkills(User user, List<String> skills) {
+        List<org.sfa.volunteer.model.UserVolunteerSkill> entities = skills.stream()
+                .filter(Objects::nonNull)
+                .map(skill -> {
+                    var id = new org.sfa.volunteer.model.UserVolunteerSkillId(user.getId(), skill);
+                    return org.sfa.volunteer.model.UserVolunteerSkill.builder()
+                            .id(id)
+                            .user(user)
+                            .createdAt(ZonedDateTime.now(ZoneId.of("UTC")))
+                            .lastUpdatedAt(ZonedDateTime.now(ZoneId.of("UTC")))
+                            .build();
+                })
+                .collect(Collectors.toList());
+
+        if (!entities.isEmpty()) {
+            userVolunteerSkillRepository.saveAll(entities);
+        }
+    }
+
+
+
 }
