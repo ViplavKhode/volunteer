@@ -144,7 +144,7 @@ public class UserController {
     }
 
     // 1) UPLOAD (Base64)
-    @PostMapping("/profile-image")
+    @PostMapping("/profileImage")
     public SaayamResponse<Map<String, Object>> uploadProfileImage(@RequestBody Map<String, String> body, HttpServletRequest req) {
 
         String userId = body.get("userId");
@@ -165,7 +165,7 @@ public class UserController {
     }
 
     // 2) VIEW (Base64 JSON)
-    @PostMapping("/profile-image/view")
+    @PostMapping("/profileImage/view")
     public SaayamResponse<Map<String, Object>> viewProfileImage(@RequestBody Map<String, String> body, HttpServletRequest req) {
         String userId = body.get("userId");
         if (userId == null || userId.isBlank()) {
@@ -189,7 +189,7 @@ public class UserController {
     }
 
     // 3) DELETE
-    @DeleteMapping("/profile-image")
+    @DeleteMapping("/profileImage")
     public SaayamResponse<Map<String, String>> deleteProfileImage(@RequestBody Map<String, String> body, HttpServletRequest req) {
 
         String userId = body.get("userId");
