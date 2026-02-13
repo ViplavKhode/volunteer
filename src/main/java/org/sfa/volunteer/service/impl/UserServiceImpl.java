@@ -21,7 +21,9 @@ import org.springframework.util.StringUtils;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.Optional;
 
 @Service
 @Transactional
@@ -293,6 +295,40 @@ import java.util.stream.Collectors;
                 .zipCode(organization.getZipCode())
                 .build();
     }
+    // Profile Pic Upload
+    // S3 URI <-> DB //
+    @Override
+    public void setProfilePicturePath(String userId, String s3Uri) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+        user.setProfilePicturePath(s3Uri);  // store S3 URI here
+        user.setLastUpdateDate(ZonedDateTime.now(ZoneId.of("UTC")));
+        userRepository.save(user);
+    }
 
+    @Override
+    public Optional<String> getProfilePicturePath(String userId) {
+        return userRepository.findById(userId)
+                .map(User::getProfilePicturePath)
+                .filter(Objects::nonNull)
+                .filter(s -> !s.isBlank());
+    }
+    @Override
+    public boolean userExists(String userId) {
+        return userRepository.existsById(userId);
+    }
+    @Override
+    public String getUserIdByEmailForAuth(String email) {
+        if (email == null || email.isBlank()) {
+            throw new UserNotFoundException("email is blank");
+        }
+        var userOpt = userRepository.findFirstByPrimaryEmailAddressOrderByLastUpdateDateDesc(email);
+        if (userOpt.isEmpty()) {
+            userOpt = userRepository.findFirstByPrimaryEmailAddressOrderByIdDesc(email);
+        }
+
+        User user = userOpt.orElseThrow(() -> new UserNotFoundException(email));
+        return user.getId();
+    }
 
 }
