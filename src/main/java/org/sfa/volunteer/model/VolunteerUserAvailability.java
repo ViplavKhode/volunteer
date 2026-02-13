@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.sfa.volunteer.model.entity.User;
 
 import java.time.ZonedDateTime;
 import java.util.Objects;

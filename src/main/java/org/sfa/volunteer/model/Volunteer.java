@@ -1,4 +1,5 @@
 package org.sfa.volunteer.model;
+
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -13,6 +14,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.sfa.volunteer.model.entity.User;
 
 import java.time.ZonedDateTime;
 import java.util.Objects;
