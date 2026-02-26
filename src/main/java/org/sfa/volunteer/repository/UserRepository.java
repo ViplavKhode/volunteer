@@ -17,4 +17,6 @@ public interface UserRepository extends JpaRepository<User, String> {
     Optional<User> findFirstByPrimaryEmailAddressOrderByLastUpdateDateDesc(String email);
     // fallback if lastUpdateDate is null/old data
     Optional<User> findFirstByPrimaryEmailAddressOrderByIdDesc(String email);
+
+    List<User> findByIdIn(List<String> userIds);
 }

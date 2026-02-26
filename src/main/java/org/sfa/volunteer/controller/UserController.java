@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -33,11 +34,11 @@ public class UserController {
     private final ResponseBuilder responseBuilder;
 
     private final ProfileImageStorageService profileImageStorageService;
-    private static final String HDR_REGION  = "X-Dev-Region";
-
+    private static final String HDR_REGION = "X-Dev-Region";
 
     @Autowired
-    public UserController(UserService userService, ResponseBuilder responseBuilder, ProfileImageStorageService profileImageStorageService) {
+    public UserController(UserService userService, ResponseBuilder responseBuilder,
+            ProfileImageStorageService profileImageStorageService) {
         this.userService = userService;
         this.responseBuilder = responseBuilder;
         this.profileImageStorageService = profileImageStorageService;
@@ -58,39 +59,40 @@ public class UserController {
     }
 
     @GetMapping("/profileByEmail/{email}")
-    public SaayamResponse<UserProfileResponse> getUserProfileByEmail(@PathVariable("email") @Email @NotBlank String email) {
+    public SaayamResponse<UserProfileResponse> getUserProfileByEmail(
+            @PathVariable("email") @Email @NotBlank String email) {
         UserProfileResponse profile = userService.getUserProfileByEmail(email);
-        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{email}, profile);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[] { email }, profile);
     }
 
     @PostMapping("/userIdByEmail")
     public SaayamResponse<UserIdResponse> getUserIdByEmail(@RequestBody FindUserProfileUsingEmail userEmail) {
         UserIdResponse email = userService.getUserIdByEmail(userEmail.email());
-        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userEmail}, email);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[] { userEmail }, email);
     }
 
     @GetMapping("/profile/{userId}")
     public SaayamResponse<UserProfileResponse> getUserProfile(@PathVariable String userId) {
         UserProfileResponse response = userService.getUserProfileById(userId);
-        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userId}, response);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[] { userId }, response);
     }
 
     @GetMapping("/wizard/{userId}")
     public SaayamResponse<WizardStatusResponse> getWizardStatus(@PathVariable String userId) {
         WizardStatusResponse response = userService.getWizardStatus(userId);
-        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userId}, response);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[] { userId }, response);
     }
-    
+
     @GetMapping("/addressStatus/{userId}")
     public SaayamResponse<AddressStatusResponse> getAddressStatus(@PathVariable String userId) {
-    	AddressStatusResponse response = userService.getAddressStatus(userId);
-        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userId}, response);
-    } 
+        AddressStatusResponse response = userService.getAddressStatus(userId);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[] { userId }, response);
+    }
 
     @GetMapping("/login/{email}")
     public SaayamResponse<UserProfileResponse> getUserProfileAfterLogin(@PathVariable String email) {
         UserProfileResponse response = userService.getUserProfileByEmail(email);
-        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{email}, response);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[] { email }, response);
     }
 
     @PutMapping("/profile/{userId}")
@@ -98,7 +100,8 @@ public class UserController {
             @PathVariable String userId,
             @RequestBody UpdateUserProfileRequest request) {
         UserProfileResponse response = userService.updateUserProfile(userId, request);
-        return responseBuilder.buildSuccessResponse(SaayamStatusCode.USER_ACCOUNT_UPDATED, new Object[]{userId}, response);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.USER_ACCOUNT_UPDATED, new Object[] { userId },
+                response);
     }
 
     @PutMapping("/organization/{userId}")
@@ -106,14 +109,15 @@ public class UserController {
             @PathVariable String userId,
             @RequestBody UpdateOrganizationRequest request) {
         OrganizationResponse response = userService.updateUserOrganization(userId, request);
-        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userId}, response);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[] { userId }, response);
     }
 
     @GetMapping("/organization/{userId}")
     public SaayamResponse<OrganizationResponse> getOrganizationByUserId(@PathVariable String userId) {
         OrganizationResponse organization = userService.getOrganizationByUserId(userId);
-        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userId}, organization);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[] { userId }, organization);
     }
+
     /* Profile Pic Upload */
     // Helper
     private String regionHint(HttpServletRequest req) {
@@ -122,7 +126,7 @@ public class UserController {
     }
 
     private static final String HDR_CALLER_USER_ID = "X-Caller-UserId";
-    private static final String HDR_CALLER_GROUPS  = "X-Caller-Groups"; // "admins,superadmins"
+    private static final String HDR_CALLER_GROUPS = "X-Caller-Groups"; // "admins,superadmins"
 
     private void authorize(HttpServletRequest req, String targetUserId) {
         String callerUserId = req.getHeader(HDR_CALLER_USER_ID);
@@ -132,7 +136,8 @@ public class UserController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing caller identity");
         }
 
-        if (callerUserId.equals(targetUserId)) return;
+        if (callerUserId.equals(targetUserId))
+            return;
 
         String g = (groups == null) ? "" : groups.toLowerCase();
         boolean isAdmin = g.contains("admin");
@@ -145,7 +150,8 @@ public class UserController {
 
     // 1) UPLOAD (Base64)
     @PostMapping("/profileImage")
-    public SaayamResponse<Map<String, Object>> uploadProfileImage(@RequestBody Map<String, String> body, HttpServletRequest req) {
+    public SaayamResponse<Map<String, Object>> uploadProfileImage(@RequestBody Map<String, String> body,
+            HttpServletRequest req) {
 
         String userId = body.get("userId");
         String contentType = body.get("contentType");
@@ -158,15 +164,15 @@ public class UserController {
         authorize(req, userId);
 
         var payload = profileImageStorageService.uploadBase64(
-                userId, contentType, base64, regionHint(req)
-        );
+                userId, contentType, base64, regionHint(req));
 
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, payload);
     }
 
     // 2) VIEW (Base64 JSON)
     @PostMapping("/profileImage/view")
-    public SaayamResponse<Map<String, Object>> viewProfileImage(@RequestBody Map<String, String> body, HttpServletRequest req) {
+    public SaayamResponse<Map<String, Object>> viewProfileImage(@RequestBody Map<String, String> body,
+            HttpServletRequest req) {
         String userId = body.get("userId");
         if (userId == null || userId.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "userId is required");
@@ -184,13 +190,13 @@ public class UserController {
                 "found", true,
                 "userId", userId,
                 "contentType", img.contentType(),
-                "base64", base64
-        ));
+                "base64", base64));
     }
 
     // 3) DELETE
     @DeleteMapping("/profileImage")
-    public SaayamResponse<Map<String, String>> deleteProfileImage(@RequestBody Map<String, String> body, HttpServletRequest req) {
+    public SaayamResponse<Map<String, String>> deleteProfileImage(@RequestBody Map<String, String> body,
+            HttpServletRequest req) {
 
         String userId = body.get("userId");
         if (userId == null || userId.isBlank()) {
@@ -203,7 +209,7 @@ public class UserController {
 
         return responseBuilder.buildSuccessResponse(
                 SaayamStatusCode.SUCCESS,
-                Map.of("userId", userId, "message", "Profile image deleted")
-        );
+                Map.of("userId", userId, "message", "Profile image deleted"));
     }
+
 }

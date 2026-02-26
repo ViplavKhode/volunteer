@@ -26,7 +26,7 @@ import java.util.Optional;
 
 @Service
 @Transactional
-    public class UserServiceImpl implements UserService {
+public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final UserStatusRepository userStatusRepository;
     private final OrganizationRepository organizationRepository;
@@ -34,6 +34,7 @@ import java.util.Optional;
     private final UserCategoryRepository userCategoryRepository;
     private final CountryRepository countryRepository;
     private final StateRepository stateRepository;
+    private final UserSkillRepository userSkillRepository;
 
     private static final int DEFAULT_PAGE = 0;
     private static final int DEFAULT_SIZE = 10;
@@ -44,14 +45,16 @@ import java.util.Optional;
     private static final Integer VOLUNTEER_CATEGORY_ID = 2; // User Category: volunteer
 
     @Autowired
-    public UserServiceImpl(UserRepository userRepository, UserStatusRepository userStatusRepository, OrganizationRepository organizationRepository, UserCategoryRepository userCategoryRepository,
-                           CountryRepository countryRepository, StateRepository stateRepository) {
+    public UserServiceImpl(UserRepository userRepository, UserStatusRepository userStatusRepository,
+            OrganizationRepository organizationRepository, UserCategoryRepository userCategoryRepository,
+            CountryRepository countryRepository, StateRepository stateRepository, UserSkillRepository userSkillRepository) {
         this.userRepository = userRepository;
         this.userStatusRepository = userStatusRepository;
         this.organizationRepository = organizationRepository;
         this.userCategoryRepository = userCategoryRepository;
         this.countryRepository = countryRepository;
         this.stateRepository = stateRepository;
+        this.userSkillRepository = userSkillRepository;
     }
 
     @Override
@@ -147,39 +150,36 @@ import java.util.Optional;
 
     @Override
     public WizardStatusResponse getWizardStatus(String userId) {
-    UserProfileResponse userProfile = getUserProfileById(userId);
+        UserProfileResponse userProfile = getUserProfileById(userId);
 
-    String addressAvailable = (userProfile.addressLine1() != null && !userProfile.addressLine1().trim().isEmpty())
-            ? "Y" : "N";
+        String addressAvailable = (userProfile.addressLine1() != null && !userProfile.addressLine1().trim().isEmpty())
+                ? "Y"
+                : "N";
 
-    return new WizardStatusResponse(
-        userId,
-        userProfile.promotionWizardStage(),
-        addressAvailable
-    );
-}
-    
+        return new WizardStatusResponse(
+                userId,
+                userProfile.promotionWizardStage(),
+                addressAvailable);
+    }
+
     @Override
     public AddressStatusResponse getAddressStatus(String userId) {
-    UserProfileResponse userProfile = getUserProfileById(userId);
+        UserProfileResponse userProfile = getUserProfileById(userId);
 
-    String addressAvailable = (userProfile.addressLine1() != null && !userProfile.addressLine1().trim().isEmpty())
-            ? "Y" : "N";
+        String addressAvailable = (userProfile.addressLine1() != null && !userProfile.addressLine1().trim().isEmpty())
+                ? "Y"
+                : "N";
 
-    return new AddressStatusResponse(
-        userId,
-        addressAvailable
-    );
-}
-
-
-
+        return new AddressStatusResponse(
+                userId,
+                addressAvailable);
+    }
 
     @Override
     public UserProfileResponse getUserProfileByEmail(String email) {
         List<User> user = userRepository.findByPrimaryEmailAddress(email.trim());
 
-        if (user==null || user.isEmpty()) {
+        if (user == null || user.isEmpty()) {
             throw new UserNotFoundException(email);
         }
 
@@ -187,17 +187,17 @@ import java.util.Optional;
     }
 
     @Override
-    public UserIdResponse getUserIdByEmail(String email){
+    public UserIdResponse getUserIdByEmail(String email) {
         List<User> user = userRepository.findFirstByPrimaryEmailAddressIgnoreCase(email.trim());
 
-        if(user==null || user.isEmpty()){
+        if (user == null || user.isEmpty()) {
             throw new UserNotFoundException(email);
         }
 
         return mapToUserIdResponse(user.get(0));
     }
 
-    private UserIdResponse mapToUserIdResponse(User user){
+    private UserIdResponse mapToUserIdResponse(User user) {
         return UserIdResponse.builder().user_id(user.getId()).build();
     }
 
@@ -244,16 +244,26 @@ import java.util.Optional;
             organization.setUser(user);
         }
 
-        if (request.organizationName() != null) organization.setOrganizationName(request.organizationName());
-        if (request.organizationType() != null) organization.setOrganizationType(request.organizationType());
-        if (request.phoneNumber() != null) organization.setPhoneNumber(request.phoneNumber());
-        if (request.email() != null) organization.setEmail(request.email());
-        if (request.url() != null) organization.setUrl(request.url());
-        if (request.streetAddress1() != null) organization.setStreetAddress1(request.streetAddress1());
-        if (request.streetAddress2() != null) organization.setStreetAddress2(request.streetAddress2());
-        if (request.city() != null) organization.setCity(request.city());
-        if (request.state() != null) organization.setState(request.state());
-        if (request.zipCode() != null) organization.setZipCode(request.zipCode());
+        if (request.organizationName() != null)
+            organization.setOrganizationName(request.organizationName());
+        if (request.organizationType() != null)
+            organization.setOrganizationType(request.organizationType());
+        if (request.phoneNumber() != null)
+            organization.setPhoneNumber(request.phoneNumber());
+        if (request.email() != null)
+            organization.setEmail(request.email());
+        if (request.url() != null)
+            organization.setUrl(request.url());
+        if (request.streetAddress1() != null)
+            organization.setStreetAddress1(request.streetAddress1());
+        if (request.streetAddress2() != null)
+            organization.setStreetAddress2(request.streetAddress2());
+        if (request.city() != null)
+            organization.setCity(request.city());
+        if (request.state() != null)
+            organization.setState(request.state());
+        if (request.zipCode() != null)
+            organization.setZipCode(request.zipCode());
 
         organization.setLastUpdateDate(ZonedDateTime.now(ZoneId.of("UTC")));
         Organization updatedOrganization = organizationRepository.save(organization);
@@ -293,13 +303,14 @@ import java.util.Optional;
                 .zipCode(organization.getZipCode())
                 .build();
     }
+
     // Profile Pic Upload
     // S3 URI <-> DB //
     @Override
     public void setProfilePicturePath(String userId, String s3Uri) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
-        user.setProfilePicturePath(s3Uri);  // store S3 URI here
+        user.setProfilePicturePath(s3Uri); // store S3 URI here
         user.setLastUpdateDate(ZonedDateTime.now(ZoneId.of("UTC")));
         userRepository.save(user);
     }
@@ -311,10 +322,12 @@ import java.util.Optional;
                 .filter(Objects::nonNull)
                 .filter(s -> !s.isBlank());
     }
+
     @Override
     public boolean userExists(String userId) {
         return userRepository.existsById(userId);
     }
+
     @Override
     public String getUserIdByEmailForAuth(String email) {
         if (email == null || email.isBlank()) {
@@ -327,6 +340,15 @@ import java.util.Optional;
 
         User user = userOpt.orElseThrow(() -> new UserNotFoundException(email));
         return user.getId();
+    }
+
+    @Override
+    public List<String> getUserSkills(String userId){
+       List<String> catId= userSkillRepository.findByIdUserId(userId).stream()
+                    .map(us -> us.getId().getCatId())
+                    .distinct()
+                    .toList();
+        return catId;
     }
 
 }
