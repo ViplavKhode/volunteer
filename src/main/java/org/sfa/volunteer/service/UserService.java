@@ -3,8 +3,7 @@ package org.sfa.volunteer.service;
 import org.sfa.volunteer.dto.request.CreateUserRequest;
 import org.sfa.volunteer.dto.request.UpdateOrganizationRequest;
 import org.sfa.volunteer.dto.request.UpdateUserProfileRequest;
-import org.sfa.volunteer.dto.request.UserPreferenceRequest;
-import org.sfa.volunteer.dto.response.UserPreferenceResponse;
+
 import org.sfa.volunteer.dto.response.*;
 
 
@@ -38,6 +37,4 @@ public interface UserService {
     java.util.Optional<String> getProfilePicturePath(String userId);
     boolean userExists(String userId);
     String getUserIdByEmailForAuth(String email);
-
-    UserPreferenceResponse updateUserPreferences(String userId, UserPreferenceRequest request) throws Exception;
 }
