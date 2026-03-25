@@ -31,6 +31,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Base64;
 import java.util.Map;
+import org.sfa.volunteer.dto.request.UserPreferenceRequest;
+import org.sfa.volunteer.dto.response.UserPreferenceResponse;
+import org.sfa.volunteer.dto.response.VolunteerResponse;
 
 @RestController
 @RequestMapping("/0.0.1/users")
@@ -227,6 +230,12 @@ public class UserController {
                 new Object[]{userId},
                 response
         );
+    }
+
+    @PutMapping("/{userId}/preferences")
+    public SaayamResponse<UserPreferenceResponse> updateUserPreferences(@PathVariable String userId, @Valid @RequestBody UserPreferenceRequest request) throws Exception {
+        UserPreferenceResponse response = userService.updateUserPreferences(userId,request);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userId}, response);
     }
 
 }
