@@ -130,6 +130,21 @@ public class UserController {
     private static final String HDR_CALLER_USER_ID = "X-Caller-UserId";
     private static final String HDR_CALLER_GROUPS  = "X-Caller-Groups"; // "admins,superadmins"
 
+    private void requireAdmin(HttpServletRequest req) {
+        String callerUserId = req.getHeader(HDR_CALLER_USER_ID);
+        String groups = req.getHeader(HDR_CALLER_GROUPS);
+
+        if (callerUserId == null || callerUserId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing caller identity");
+        }
+
+        String g = (groups == null) ? "" : groups.toLowerCase();
+        boolean isAdmin = g.contains("admin");
+        if (!isAdmin) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed");
+        }
+    }
+
     private void authorize(HttpServletRequest req, String targetUserId) {
         String callerUserId = req.getHeader(HDR_CALLER_USER_ID);
         String groups = req.getHeader(HDR_CALLER_GROUPS);
@@ -227,6 +242,18 @@ public class UserController {
                 new Object[]{userId},
                 response
         );
+    }
+
+    @GetMapping("/search")
+    public SaayamResponse<PaginationResponse<UserProfileResponse>> searchUsers(
+            @RequestParam("q") String query,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "size", required = false) Integer size,
+            HttpServletRequest req
+    ) {
+        requireAdmin(req);
+        PaginationResponse<UserProfileResponse> response = userService.searchUsers(query, page, size);
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{query, page, size}, response);
     }
 
 }
