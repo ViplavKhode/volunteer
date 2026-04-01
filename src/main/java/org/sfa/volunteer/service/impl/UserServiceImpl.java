@@ -182,6 +182,55 @@ import java.util.stream.Collectors;
     }
 
     @Override
+    public PaginationResponse<UserProfileResponse> searchUsers(String query, Integer pageNumber, Integer pageSize) {
+        if (query == null || query.isBlank()) {
+            return PaginationResponse.<UserProfileResponse>builder()
+                    .currentPage(0)
+                    .pageSize(0)
+                    .totalPages(0)
+                    .totalItems(0)
+                    .items(List.of())
+                    .hasNextPage(false)
+                    .hasPreviousPage(false)
+                    .build();
+        }
+
+        int pageNum = (pageNumber == null) ? DEFAULT_PAGE : pageNumber;
+        int pageSizeNum = (pageSize == null) ? DEFAULT_SIZE : pageSize;
+        Pageable pageable = PageRequest.of(pageNum, pageSizeNum);
+
+        String q = "%" + query.trim().toLowerCase() + "%";
+        Page<User> userPage = userRepository.searchUsers(q, pageable);
+
+        List<UserProfileResponse> userProfiles = userPage.stream()
+                .map(this::mapToUserProfileResponse)
+                .collect(Collectors.toList());
+
+        return PaginationResponse.<UserProfileResponse>builder()
+                .currentPage(userPage.getNumber())
+                .pageSize(userPage.getSize())
+                .totalPages(userPage.getTotalPages())
+                .totalItems(userPage.getTotalElements())
+                .items(userProfiles)
+                .hasNextPage(userPage.hasNext())
+                .hasPreviousPage(userPage.hasPrevious())
+                .build();
+    }
+
+    @Override
+    public boolean isAdminUser(String userId) {
+        if (userId == null || userId.isBlank()) return false;
+
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null) return false;
+
+        String category = (user.getUserCategory() == null) ? null : user.getUserCategory().getUserCategory();
+
+        if (category != null && category.toLowerCase().contains("admin")) return true;
+        return false;
+    }
+
+    @Override
     public UserProfileResponse getUserProfileById(String userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));

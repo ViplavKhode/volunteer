@@ -12,6 +12,10 @@ public interface UserService {
 
     PaginationResponse<UserProfileResponse> findAllUsersWithPagination(Integer pageNumber, Integer pageSize);
 
+    PaginationResponse<UserProfileResponse> searchUsers(String query, Integer pageNumber, Integer pageSize);
+
+    boolean isAdminUser(String userId);
+
     UserProfileResponse getUserProfileById(String userId);
 
     WizardStatusResponse getWizardStatus(String userId);
