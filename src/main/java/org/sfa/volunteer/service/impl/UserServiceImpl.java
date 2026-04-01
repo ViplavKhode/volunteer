@@ -212,6 +212,19 @@ import java.util.stream.Collectors;
     }
 
     @Override
+    public boolean isAdminUser(String userId) {
+        if (userId == null || userId.isBlank()) return false;
+
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null) return false;
+
+        String category = (user.getUserCategory() == null) ? null : user.getUserCategory().getUserCategory();
+
+        if (category != null && category.toLowerCase().contains("admin")) return true;
+        return false;
+    }
+
+    @Override
     public UserProfileResponse getUserProfileById(String userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));

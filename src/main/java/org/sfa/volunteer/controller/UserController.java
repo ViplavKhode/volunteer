@@ -132,16 +132,17 @@ public class UserController {
 
     private void requireAdmin(HttpServletRequest req) {
         String callerUserId = req.getHeader(HDR_CALLER_USER_ID);
-        String groups = req.getHeader(HDR_CALLER_GROUPS);
 
         if (callerUserId == null || callerUserId.isBlank()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing caller identity");
         }
 
-        String g = (groups == null) ? "" : groups.toLowerCase();
-        boolean isAdmin = g.contains("admin");
-        if (!isAdmin) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed");
+        if (!userService.userExists(callerUserId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User does not exist");
+        }
+
+        if (!userService.isAdminUser(callerUserId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User is not an admin");
         }
     }
 
