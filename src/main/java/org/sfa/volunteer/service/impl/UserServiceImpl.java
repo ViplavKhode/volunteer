@@ -1,6 +1,9 @@
 package org.sfa.volunteer.service.impl;
 
 import jakarta.transaction.Transactional;
+
+import org.sfa.volunteer.dto.common.SaayamResponse;
+import org.sfa.volunteer.dto.common.SaayamStatusCode;
 import org.sfa.volunteer.dto.request.CreateUserRequest;
 import org.sfa.volunteer.dto.request.UpdateOrganizationRequest;
 import org.sfa.volunteer.dto.request.UpdateUserProfileRequest;
@@ -16,13 +19,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.List;
-import java.util.Objects;
 import java.util.stream.Collectors;
-import java.util.Optional;
+import java.util.*;
 
 @Service
 @Transactional
@@ -47,7 +51,8 @@ public class UserServiceImpl implements UserService {
     @Autowired
     public UserServiceImpl(UserRepository userRepository, UserStatusRepository userStatusRepository,
             OrganizationRepository organizationRepository, UserCategoryRepository userCategoryRepository,
-            CountryRepository countryRepository, StateRepository stateRepository, UserSkillRepository userSkillRepository) {
+            CountryRepository countryRepository, StateRepository stateRepository,
+            UserSkillRepository userSkillRepository) {
         this.userRepository = userRepository;
         this.userStatusRepository = userStatusRepository;
         this.organizationRepository = organizationRepository;
@@ -343,12 +348,55 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public List<String> getUserSkills(String userId){
-       List<String> catId= userSkillRepository.findByIdUserId(userId).stream()
-                    .map(us -> us.getId().getCatId())
-                    .distinct()
-                    .toList();
-        return catId;
+    public UserSkillsResponse getUserSkills(String userId) {
+        if (!userRepository.existsById(userId)) {
+            throw new RuntimeException("User not found with id " + userId);
+        }
+        List<String> skills = userSkillRepository.findByIdUserId(userId)
+                .stream()
+                .map(us -> us.getId().getCatId())
+                .distinct()
+                .toList();
+
+        return new UserSkillsResponse(userId, skills);
     }
 
+    @Transactional
+    public void updateUserSkills(String userId, List<String> skills) {
+
+        // handle null case
+        if (skills == null) {
+            skills = List.of();
+        }
+
+        // remove duplicates
+        Set<String> incomingSkills = new HashSet<>(skills);
+
+        // fetch existing skills from DB
+        List<UserSkills> existingSkills = userSkillRepository.findByIdUserId(userId);
+
+        Set<String> existing = existingSkills.stream()
+                .map(us -> us.getId().getCatId())
+                .collect(Collectors.toSet());
+
+        // -------- delete removed skills --------
+        List<UserSkills> toDelete = existingSkills.stream()
+                .filter(skill -> !incomingSkills.contains(skill.getId().getCatId()))
+                .toList();
+
+        userSkillRepository.deleteAll(toDelete);
+
+        // -------- add new skills --------
+        List<UserSkills> toInsert = incomingSkills.stream()
+                .filter(skill -> !existing.contains(skill))
+                .map(skill -> {
+                    UserSkillId id = new UserSkillId(userId, skill);
+                    UserSkills entity = new UserSkills();
+                    entity.setId(id);
+                    return entity;
+                })
+                .toList();
+
+        userSkillRepository.saveAll(toInsert);
+    }
 }

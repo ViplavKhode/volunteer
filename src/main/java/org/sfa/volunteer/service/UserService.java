@@ -40,5 +40,9 @@ public interface UserService {
 
     String getUserIdByEmailForAuth(String email);
 
-    List<String> getUserSkills(String userId);
+    UserSkillsResponse getUserSkills(String userId);
+
+    void updateUserSkills(String userId, List<String> skills);
+
+    
 }

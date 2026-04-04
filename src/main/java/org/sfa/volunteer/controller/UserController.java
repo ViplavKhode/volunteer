@@ -6,9 +6,12 @@ import jakarta.validation.constraints.NotBlank;
 import org.sfa.volunteer.dto.common.SaayamResponse;
 import org.sfa.volunteer.dto.common.SaayamStatusCode;
 import org.sfa.volunteer.dto.request.CreateUserRequest;
+import org.sfa.volunteer.dto.request.DeleteUserSkillsRequest;
 import org.sfa.volunteer.dto.request.FindUserProfileUsingEmail;
 import org.sfa.volunteer.dto.request.UpdateOrganizationRequest;
 import org.sfa.volunteer.dto.request.UpdateUserProfileRequest;
+import org.sfa.volunteer.dto.request.UpdateUserSkillsRequest;
+import org.sfa.volunteer.dto.request.UserSkillsRequest;
 import org.sfa.volunteer.dto.response.*;
 import org.sfa.volunteer.service.ProfileImageStorageService;
 import org.sfa.volunteer.service.UserService;
@@ -212,4 +215,39 @@ public class UserController {
                 Map.of("userId", userId, "message", "Profile image deleted"));
     }
 
+    @PostMapping("/profileSkills")
+    public SaayamResponse<UserSkillsResponse> getUserSkills(@RequestBody UserSkillsRequest request) {
+
+        UserSkillsResponse res = userService.getUserSkills(request.getUserId());
+
+        return responseBuilder.buildSuccessResponse(
+                SaayamStatusCode.SUCCESS,
+                new Object[] { request.getUserId() },
+                res);
+
+    }
+
+    @PutMapping("/profileSkills/update")
+    public SaayamResponse<String> updateUserSkills(
+            @RequestBody UpdateUserSkillsRequest request) {
+
+        userService.updateUserSkills(request.getUserId(), request.getSkills());
+
+        return responseBuilder.buildSuccessResponse(
+                SaayamStatusCode.SUCCESS,
+                new Object[] { request.getUserId() },
+                "Skills updated successfully");
+    }
+
+    @DeleteMapping("/profileSkills/delete")
+    public SaayamResponse<String> deleteUserSkills(
+            @RequestBody DeleteUserSkillsRequest request) {
+
+        userService.updateUserSkills(request.getUserId(), request.getSkills());
+
+        return responseBuilder.buildSuccessResponse(
+                SaayamStatusCode.SUCCESS,
+                new Object[] { request.getUserId() },
+                "Skills deleted successfully");
+    }
 }
