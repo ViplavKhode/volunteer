@@ -9,11 +9,16 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/email-verification")
+@RequestMapping("/0.0.1/email-verification")
 public class EmailVerificationController {
 
     @Autowired
     private EmailVerificationService emailVerificationService;
+
+    @GetMapping("/healthCheck")
+    public String health(){
+        return "Connection is healthy";
+    }
 
     @PostMapping("/request")
     public ResponseEntity<?> requestVerification(@RequestBody EmailVerificationRequest request) {

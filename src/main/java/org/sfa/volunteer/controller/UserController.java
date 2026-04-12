@@ -33,7 +33,6 @@ import java.util.Base64;
 import java.util.Map;
 import org.sfa.volunteer.dto.request.UserPreferenceRequest;
 import org.sfa.volunteer.dto.response.UserPreferenceResponse;
-import org.sfa.volunteer.dto.response.VolunteerResponse;
 
 @RestController
 @RequestMapping("/0.0.1/users")
