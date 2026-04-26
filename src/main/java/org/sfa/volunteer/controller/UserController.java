@@ -105,7 +105,10 @@ public class UserController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "timezoneId parameter is required");
         }
         
-        String friendlyName = timezoneUtil.getFriendlyName(timezoneId);
+        // Extract the IANA timezone ID from the frontend format, which might include offset and name
+        // e.g., "America/Indianapolis (UTC-04:00) (Eastern Daylight Time)" -> "America/Indianapolis"
+        String parsedTimezoneId = timezoneId.trim().split("\\s+")[0];
+        String friendlyName = timezoneUtil.getFriendlyName(parsedTimezoneId);
         
         Map<String, String> response = Map.of(
             "timezoneId", timezoneId,
