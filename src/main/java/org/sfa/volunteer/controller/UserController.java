@@ -21,19 +21,17 @@ import org.sfa.volunteer.dto.response.*;
 import org.sfa.volunteer.service.ProfileImageStorageService;
 import org.sfa.volunteer.service.UserService;
 import org.sfa.volunteer.util.ResponseBuilder;
+import org.sfa.volunteer.util.TimezoneUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Base64;
 import java.util.Map;
 import org.sfa.volunteer.dto.request.UserPreferenceRequest;
 import org.sfa.volunteer.dto.response.UserPreferenceResponse;
-import org.sfa.volunteer.dto.response.VolunteerResponse;
 
 @RestController
 @RequestMapping("/0.0.1/users")
@@ -42,14 +40,16 @@ public class UserController {
     private final UserService userService;
     private final ResponseBuilder responseBuilder;
     private final ProfileImageStorageService profileImageStorageService;
+    private final TimezoneUtil timezoneUtil;
     private static final String HDR_REGION  = "X-Dev-Region";
 
 
     @Autowired
-    public UserController(UserService userService, ResponseBuilder responseBuilder, ProfileImageStorageService profileImageStorageService) {
+    public UserController(UserService userService, ResponseBuilder responseBuilder, ProfileImageStorageService profileImageStorageService, TimezoneUtil timezoneUtil) {
         this.userService = userService;
         this.responseBuilder = responseBuilder;
         this.profileImageStorageService = profileImageStorageService;
+        this.timezoneUtil = timezoneUtil;
     }
 
     @PostMapping
@@ -94,6 +94,28 @@ public class UserController {
     public SaayamResponse<AddressStatusResponse> getAddressStatus(@PathVariable String userId) {
     	AddressStatusResponse response = userService.getAddressStatus(userId);
         return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, new Object[]{userId}, response);
+    }
+
+    
+    @GetMapping("/timezone")
+    public SaayamResponse<Map<String, String>> getTimezoneDisplayName(
+            @RequestParam(value = "timezoneId") String timezoneId) {
+        
+        if (timezoneId == null || timezoneId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "timezoneId parameter is required");
+        }
+        
+        // Extract the IANA timezone ID from the frontend format, which might include offset and name
+        // e.g., "America/Indianapolis (UTC-04:00) (Eastern Daylight Time)" -> "America/Indianapolis"
+        String parsedTimezoneId = timezoneId.trim().split("\\s+")[0];
+        String friendlyName = timezoneUtil.getFriendlyName(parsedTimezoneId);
+        
+        Map<String, String> response = Map.of(
+            "timezoneId", timezoneId,
+            "friendlyName", friendlyName
+        );
+        
+        return responseBuilder.buildSuccessResponse(SaayamStatusCode.SUCCESS, response);
     } 
 
     @GetMapping("/login/{email}")
@@ -127,7 +149,7 @@ public class UserController {
     // Helper
     private String regionHint(HttpServletRequest req) {
         String r = req.getHeader(HDR_REGION);
-        return (r == null || r.isBlank()) ? "us-east-1" : r;
+        return (r == null || r.isBlank()) ? "us-2-1" : r;
     }
 
     private static final String HDR_CALLER_USER_ID = "X-Caller-UserId";
